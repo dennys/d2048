@@ -1,0 +1,120 @@
+name: Flutter CI
+
+# Trigger the workflow on push or pull request to the main branch
+on:
+  push:
+    branches: ['*']
+    # tags: ['v*']  # Trigger release on tags like v1.0.0
+  pull_request:
+    branches:
+      - '*'
+      #- main
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build and Test, and Analyze
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+
+    steps:
+      # Checkout the repository code
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # Set up Java (required for Android builds)
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      # Set up Flutter
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.29.0'
+          channel: 'stable'
+          cache: true
+          cache-key: flutter-${{ runner.os }}-pub-${{ hashFiles('**/pubspec.lock') }}
+
+      # Cache Flutter dependencies to speed up builds
+      - name: Cache Flutter dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.pub-cache
+          key: ${{ runner.os }}-pub-${{ hashFiles('**/pubspec.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-pub-
+
+      # Get Flutter dependencies
+      - name: Install dependencies
+        run: flutter pub get
+
+      # Run Flutter analyze to check for lint issues
+      - name: Analyze code
+        run: flutter analyze || true # Continues even if warnings are found
+
+      # Run tests
+      #- name: Run tests
+      #  run: flutter test
+
+      # CodeQL Steps
+      #- name: Initialize CodeQL
+      #  uses: github/codeql-action/init@v3
+      #  with:
+      #    languages: 'dart'
+      #
+      #- name: Autobuild
+      #  uses: github/codeql-action/autobuild@v3
+      #
+      #- name: Perform CodeQL Analysis
+      #  uses: github/codeql-action/analyze@v3
+
+      # Build APK
+      - name: Build APK
+        # if: github.event_name == 'workflow_dispatch'
+        run: flutter build apk --debug --verbose
+
+      #- name: Upload APK Artifact
+      #  uses: actions/upload-artifact@v4
+      #  with:
+      #    name: app-debug.apk
+      #    path: build/app/outputs/flutter-apk/app-debug.apk
+
+      # Optional: Build for iOS (requires macOS runner)
+      # - name: Build iOS
+      #   if: runner.os == 'macOS'
+      #   run: flutter build ios --no-codesign
+      
+  #release:
+  #  name: Create Release with APK
+  #  needs: build-and-analyze  # Runs after build-and-analyze
+  #  if: startsWith(github.ref, 'refs/tags/v')  # Only on tags
+  #  runs-on: ubuntu-latest
+  #  permissions:
+  #    contents: write  # Required to create releases
+  #  steps:
+  #    - name: Checkout code
+  #      uses: actions/checkout@v4
+  #
+  #    - name: Download APK Artifact
+  #      uses: actions/download-artifact@v4
+  #      with:
+  #        name: app-debug.apk
+  #        path: ./artifacts
+  #
+  #    - name: Create Release with APK
+  #      uses: softprops/action-gh-release@v1
+  #      with:
+  #        files: ./artifacts/app-debug.apk
+  #        tag_name: ${{ github.ref_name }}  # e.g., v1.0.0
+  #        name: Release ${{ github.ref_name }}
+  #        draft: false
+  #        prerelease: false
+  #      env:
+  #        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
