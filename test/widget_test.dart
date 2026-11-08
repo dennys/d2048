@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:g2048/main.dart';
+import 'package:d2048/main.dart';
 
 int _tileCount(WidgetTester tester) => tester
     .widgetList<Text>(find.byType(Text))
