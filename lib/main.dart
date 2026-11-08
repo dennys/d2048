@@ -34,6 +34,18 @@ class _GameScreenState extends State<GameScreen> {
   int score = 0;
   bool gameOver = false;
   final Random random = Random();
+  final List<_Snapshot> history = [];
+
+  List<List<int>> _cloneBoard() =>
+      List.generate(4, (i) => List.of(board[i]));
+
+  void _undo() {
+    if (history.isEmpty) return;
+    final snapshot = history.removeLast();
+    board = snapshot.board;
+    score = snapshot.score;
+    gameOver = false;
+  }
 
   @override
   void initState() {
@@ -46,6 +58,7 @@ class _GameScreenState extends State<GameScreen> {
     board = List.generate(4, (_) => List.filled(4, 0));
     score = 0;
     gameOver = false;
+    history.clear();
 
     // Add two random tiles to start
     _addRandomTile();
@@ -98,10 +111,7 @@ class _GameScreenState extends State<GameScreen> {
   }
 
   bool _move(Direction direction) {
-    List<List<int>> oldBoard = List.generate(
-      4,
-      (i) => List.generate(4, (j) => board[i][j]),
-    );
+    history.add(_Snapshot(_cloneBoard(), score));
     bool moved = false;
 
     switch (direction) {
@@ -119,15 +129,18 @@ class _GameScreenState extends State<GameScreen> {
         break;
     }
 
-    if (moved) {
-      _addRandomTile();
-
-      if (!_canMove()) {
-        gameOver = true;
-      }
+    if (!moved) {
+      history.removeLast();
+      return false;
     }
 
-    return moved;
+    _addRandomTile();
+
+    if (!_canMove()) {
+      gameOver = true;
+    }
+
+    return true;
   }
 
   bool _moveLeft() {
@@ -293,13 +306,24 @@ class _GameScreenState extends State<GameScreen> {
                       fontWeight: FontWeight.bold,
                     ),
                   ),
-                  ElevatedButton(
-                    onPressed: () {
-                      setState(() {
-                        _initializeGame();
-                      });
-                    },
-                    child: const Text('New Game'),
+                  Row(
+                    children: [
+                      ElevatedButton(
+                        onPressed: history.isEmpty
+                            ? null
+                            : () => setState(_undo),
+                        child: const Text('Undo'),
+                      ),
+                      const SizedBox(width: 8),
+                      ElevatedButton(
+                        onPressed: () {
+                          setState(() {
+                            _initializeGame();
+                          });
+                        },
+                        child: const Text('New Game'),
+                      ),
+                    ],
                   ),
                 ],
               ),
@@ -437,3 +461,10 @@ class _GameScreenState extends State<GameScreen> {
 }
 
 enum Direction { up, down, left, right }
+
+class _Snapshot {
+  final List<List<int>> board;
+  final int score;
+
+  _Snapshot(this.board, this.score);
+}

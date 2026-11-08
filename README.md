@@ -1,16 +1,17 @@
-# g2048
+# d2048
 
-A new Flutter project.
+2048 puzzle game built with Flutter. Drag/swipe to slide and merge tiles.
 
-## Getting Started
+## Features
 
-This project is a starting point for a Flutter application.
+1. Swipe (or drag) in four directions to move and merge tiles
+2. Score tracking
+3. New Game
+4. Undo (rollback) the last move
 
-A few resources to get you started if this is your first Flutter project:
+## Run
 
-- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
-
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+```
+flutter pub get
+flutter run
+```
