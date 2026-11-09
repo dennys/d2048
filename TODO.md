@@ -6,6 +6,9 @@
 
 ## 2026-11-09 待辦：遷移到 Flutter Built-in Kotlin（d2048 / dNeko / dHealth 三案共同）
 
+> **狀態（2026-11-09）**：d2048 **已遷移完成**，本機 debug 驗过（看本節末「d2048 已做」）。
+> dNeko／dHealth 仍待比照，但得等各自的原生插件就緒（d2048 零插件，條件最好）。
+
 每次 Gradle build 都會噴：
 
 ```
@@ -48,5 +51,35 @@ awesome_notifications／workmanager／health／permission_handler／file_picker�
 方向（**尚未驗證**，以官方 guide 為準）：`android.builtInKotlin=true` + 拿掉 app 的 KGP plugin 行。
 驗收至少要有：`flutter analyze`、`flutter test`、`flutter build apk --debug --target-platform android-arm64`，
 加一次 **release**（AOT 只能在 x86-64 機器或 CI 驗，本機 dgx1 出不了 release）。
+
+### d2048 已做（2026-11-09，hc terminal 實測）
+
+只改了兩處：
+1. `android/app/build.gradle.kts`：删掉 `id("org.jetbrains.kotlin.android")`（`kotlin { compilerOptions { jvmTarget } }` 留著，
+   `settings.gradle.kts` 的 KGP 版號行也留著 —— FGP 還沒遷移的插件要用）。
+2. `android/gradle.properties`：`android.builtInKotlin=false` → `true`（`android.newDsl` 維持 false，那是另一件事）。
+
+**證明真的生效**（不能只看警告消失：警告是因為 app 自己宣告 KGP 才噴，FGP 在背後偷偷套 KGP 時它不噴）——
+用 init script 探 `:app` 的 plugin 狀態：
+
+```
+builtInKotlin=true  → PROBE KGP_APPLIED=false   ← AGP 自己編 Kotlin
+builtInKotlin=false → PROBE KGP_APPLIED=true    ← FGP 在背後套 KGP（逃生口）
+```
+
+本機驗过：`flutter analyze` No issues found、`flutter test` All tests passed、
+`flutter build apk --debug --target-platform android-arm64` ✓ Built（73.6 MiB，與遷移前同大）。
+**尚未驗**：release（AOT，本機出不了）→ 推上去讓 CI 跑，或在 Windows build 一次。
+
+### AGP 要不要趁勢升到 9.5？（2026-11-09 決定：不升）
+
+Flutter 3.47.9 自己的工具鏈就把範本版號硬編在 **AGP 9.1.0 / KGP 2.4.0**
+（`flutter/packages/flutter_tools/lib/src/android/gradle_utils.dart:44-52`，`flutter create` 生出來的就是這兩個）。
+也就是 9.1.0 是「Flutter 團隊幫你驗過」的那一版；搶先上 9.5 就是自己去當前人。
+再加上 built-in Kotlin 之後 **Kotlin 編譯器是 AGP 內附的**，AGP 一動 Kotlin 就跟著動（#192167 就是这类版本錯位）。
+
+要升的時機：① 升 Flutter 後範本改了版號；② 需要 AGP 的修正/新功能；③ Play 要求更新的 targetSdk。
+升的時候：一案一案升、CI 當驗證、在有網路的機器上做（本機 gradle 快取只有 9.0.1/9.1.0）。
+
 
 ---

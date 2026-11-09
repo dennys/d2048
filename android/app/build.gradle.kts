@@ -2,8 +2,10 @@ import java.util.Properties
 
 plugins {
     id("com.android.application")
-    id("org.jetbrains.kotlin.android")
-    // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
+    // Built-in Kotlin（AGP 9 內建）：不再套 org.jetbrains.kotlin.android（KGP）。
+    // 翻開關在 android/gradle.properties 的 android.builtInKotlin=true；
+    // settings.gradle.kts 裡的 KGP 版號行先留著，等所有插件都遷移完再清。
+    // The Flutter Gradle Plugin must be applied after the Android Gradle Plugin.
     id("dev.flutter.flutter-gradle-plugin")
 }
 
