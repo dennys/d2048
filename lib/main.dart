@@ -143,112 +143,65 @@ class _GameScreenState extends State<GameScreen> {
     return true;
   }
 
-  bool _moveLeft() {
-    bool moved = false;
+  /// One handler for both axes: the pan recognizer already picked a direction, so pick
+  /// the dominant axis here and let a drag with no speed at all do nothing.
+  void _swipe(Velocity velocity) {
+    if (gameOver) return;
+    final dx = velocity.pixelsPerSecond.dx;
+    final dy = velocity.pixelsPerSecond.dy;
+    if (dx == 0 && dy == 0) return;
+    setState(() => _move(dx.abs() >= dy.abs()
+        ? (dx < 0 ? Direction.left : Direction.right)
+        : (dy < 0 ? Direction.up : Direction.down)));
+  }
 
-    for (int i = 0; i < 4; i++) {
-      List<int> row = board[i].toList();
-      List<int> newRow = _compressAndMerge(row);
+  // 四方向只把「取哪份 4 格、有没有反面」不同；把 merge rule 在只一处（原本把四份雨段抄略差一份）
+  bool _moveLeft() => _slideRows(false);
+  bool _moveRight() => _slideRows(true);
+  bool _moveUp() => _slideColumns(false);
+  bool _moveDown() => _slideColumns(true);
 
-      if (!_listsEqual(row, newRow)) {
-        moved = true;
+  bool _slideRows(bool reverse) {
+    var moved = false;
+    for (var i = 0; i < 4; i++) {
+      final merged = _mergeLine(board[i], reverse: reverse);
+      for (var j = 0; j < 4; j++) {
+        if (board[i][j] != merged[j]) moved = true;
+        board[i][j] = merged[j];
       }
-
-      board[i] = newRow;
     }
-
     return moved;
   }
 
-  bool _moveRight() {
-    bool moved = false;
-
-    for (int i = 0; i < 4; i++) {
-      List<int> row = board[i].toList();
-      row = row.reversed.toList();
-      List<int> newRow = _compressAndMerge(row);
-      newRow = newRow.reversed.toList();
-
-      if (!_listsEqual(row.reversed.toList(), newRow)) {
-        moved = true;
+  bool _slideColumns(bool reverse) {
+    var moved = false;
+    for (var j = 0; j < 4; j++) {
+      final merged = _mergeLine([for (var i = 0; i < 4; i++) board[i][j]], reverse: reverse);
+      for (var i = 0; i < 4; i++) {
+        if (board[i][j] != merged[i]) moved = true;
+        board[i][j] = merged[i];
       }
-
-      board[i] = newRow;
     }
-
     return moved;
   }
 
-  bool _moveUp() {
-    bool moved = false;
-
-    for (int j = 0; j < 4; j++) {
-      List<int> col = [board[0][j], board[1][j], board[2][j], board[3][j]];
-      List<int> newCol = _compressAndMerge(col);
-
-      if (!_listsEqual(col, newCol)) {
-        moved = true;
-
-        for (int i = 0; i < 4; i++) {
-          board[i][j] = newCol[i];
-        }
-      }
-    }
-
-    return moved;
-  }
-
-  bool _moveDown() {
-    bool moved = false;
-
-    for (int j = 0; j < 4; j++) {
-      List<int> col = [board[0][j], board[1][j], board[2][j], board[3][j]];
-      col = col.reversed.toList();
-      List<int> newCol = _compressAndMerge(col);
-      newCol = newCol.reversed.toList();
-
-      if (!_listsEqual(col.reversed.toList(), newCol)) {
-        moved = true;
-
-        for (int i = 0; i < 4; i++) {
-          board[i][j] = newCol[i];
-        }
-      }
-    }
-
-    return moved;
-  }
-
-  List<int> _compressAndMerge(List<int> line) {
-    // Remove zeros (compress)
-    List<int> nonZeros = line.where((value) => value != 0).toList();
-
-    // Merge adjacent equal values
-    for (int i = 0; i < nonZeros.length - 1; i++) {
+  /// Slides one line of 4 cells towards the low index; [reverse] slides it the other way.
+  List<int> _mergeLine(List<int> line, {bool reverse = false}) {
+    final src = reverse ? line.reversed.toList() : line;
+    final nonZeros = src.where((value) => value != 0).toList();
+    // 單 merge per pair per move（2,2,4 走左 = 4,4，不是 8,0）
+    for (var i = 0; i < nonZeros.length - 1; i++) {
       if (nonZeros[i] == nonZeros[i + 1]) {
         nonZeros[i] *= 2;
         score += nonZeros[i];
         nonZeros[i + 1] = 0;
       }
     }
-
-    // Remove zeros again after merging
-    nonZeros = nonZeros.where((value) => value != 0).toList();
-
-    // Fill the remaining spaces with zeros
-    while (nonZeros.length < 4) {
-      nonZeros.add(0);
+    final merged = nonZeros.where((value) => value != 0).toList();
+    while (merged.length < 4) {
+      merged.add(0);
     }
-
-    return nonZeros;
-  }
-
-  bool _listsEqual(List<int> a, List<int> b) {
-    if (a.length != b.length) return false;
-    for (int i = 0; i < a.length; i++) {
-      if (a[i] != b[i]) return false;
-    }
-    return true;
+    return reverse ? merged.reversed.toList() : merged;
   }
 
   Color _getTileColor(int value) {
@@ -335,40 +288,11 @@ class _GameScreenState extends State<GameScreen> {
                 child: AspectRatio(
                   aspectRatio: 1.0,
                   child: GestureDetector(
-                    onVerticalDragEnd: (details) {
-                      if (details.velocity.pixelsPerSecond.dy < 0) {
-                        // Swiped up
-                        if (!gameOver) {
-                          setState(() {
-                            _move(Direction.up);
-                          });
-                        }
-                      } else if (details.velocity.pixelsPerSecond.dy > 0) {
-                        // Swiped down
-                        if (!gameOver) {
-                          setState(() {
-                            _move(Direction.down);
-                          });
-                        }
-                      }
-                    },
-                    onHorizontalDragEnd: (details) {
-                      if (details.velocity.pixelsPerSecond.dx < 0) {
-                        // Swiped left
-                        if (!gameOver) {
-                          setState(() {
-                            _move(Direction.left);
-                          });
-                        }
-                      } else if (details.velocity.pixelsPerSecond.dx > 0) {
-                        // Swiped right
-                        if (!gameOver) {
-                          setState(() {
-                            _move(Direction.right);
-                          });
-                        }
-                      }
-                    },
+                    // 斜拖 only counts as one move: the pan recognizer fires BOTH drag-end
+                    // callbacks when a gesture has speed on both axes, so the old code ran _move
+                    // twice for one diagonal swipe. Pick the dominant axis instead.
+                    onVerticalDragEnd: (details) => _swipe(details.velocity),
+                    onHorizontalDragEnd: (details) => _swipe(details.velocity),
                     child: Container(
                       margin: const EdgeInsets.all(8.0),
                       padding: const EdgeInsets.all(8.0),

@@ -5,6 +5,21 @@
 新的完成紀錄加在最上面。
 
 ---
+## 2026-11-10 CI signing + small cleanups (device checks still zero)
+
+- `android/app/build.gradle.kts` already read `android/app/key.properties`, but CI never
+  restored the secrets, so every CI release APK was debug-signed (new signature per build ->
+  no in-place upgrade). Added the "Restore signing key" step, same shape as dNeko/dHealth
+  minus their JCA preflight.
+- `lib/main.dart`: one `_swipe` handler for both drag-end callbacks + `_mergeLine` shared by
+  the four directions (the four copies each differed by one reversal). Net -88 lines.
+  Verified `flutter analyze` clean, `flutter test` green.
+- Note on a wrong review claim: a diagonal drag does NOT move twice -- the pan recognizer
+  locks one direction (instrumented `_move` calls showed one per swipe), so the old
+  double-handler code was correct. `test/widget_test.dart` C-1 keeps it that way.
+- `pubspec.yaml`: dropped `cupertino_icons` (0 references).
+
+---
 ## 2026-11-09 待辦：遷移到 Flutter Built-in Kotlin（d2048 / dNeko / dHealth 三案共同）（d2048 端已完成）
 ### d2048 已做（2026-11-09，hc terminal 實測）
 

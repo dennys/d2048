@@ -74,6 +74,36 @@ jobs:
 
       # 之前 CI 完全沒驗 release（AOT）→ 本地踩過的 aapt2/AOT/strip 類問題 CI 一張網都抓不到。
       # 沒有 keystore secrets 時會用 debug 簽章（見 app/build.gradle.kts），不會紅。
+      # release signing: keystore and key.properties come only from GitHub secrets
+      # (public repo -> nothing secret in the tree). The Gradle side already reads
+      # android/app/key.properties; without this step CI always fell back to the debug
+      # key that every runner regenerates -> a different signature per build, so
+      # Android refuses in-place upgrades of the CI artifact.
+      - name: Restore signing key
+        env:
+          KEYSTORE_B64: ${{ secrets.KEYSTORE_B64 }}
+          KEY_PROPERTIES: ${{ secrets.KEY_PROPERTIES }}
+        run: |
+          if [ -z "$KEYSTORE_B64" ] || [ -z "$KEY_PROPERTIES" ]; then
+            echo "::warning::KEYSTORE_B64 / KEY_PROPERTIES not set, release APK will be debug-signed"
+            exit 0
+          fi
+          # secrets 常判贴时带 \r/空白：base64 把全部空白清掉；key.properties 只去 \r（properties 内部版面有意味）
+          printf '%s' "$KEYSTORE_B64" | tr -d '[:space:]' | base64 -d > android/app/d2048.keystore
+          printf '%s\n' "$KEY_PROPERTIES" | tr -d '\r' > android/app/key.properties
+          # 四行都准都有（app/build.gradle.kts 是 getProperty 直接读，少一行拿到 null，
+          # 到 :app:packageRelease 才炸難猜）；storeFile 是相对 android/app/ 的路径。
+          prop(){ sed -n "s/^[[:space:]]*$1[[:space:]]*=[[:space:]]*//p" android/app/key.properties | head -1 | tr -d '\r'; }
+          for k in storeFile storePassword keyAlias keyPassword; do
+            test -n "$(prop "$k")" || { echo "::error::key.properties 缺 $k=（storeFile 是相对 android/app/ 的）"; exit 1; }
+          done
+          # 2026-11-09 换发过共用钥：旧密码曾以明文 commit 进 public repo history → 永久作废
+          PW=$(prop storePassword); KP=$(prop keyPassword)
+          if [ "$PW" = "iu6cv1o8k5b7re0d" ] || [ "$KP" = "iu6cv1o8k5b7re0d" ]; then
+            echo "::error::用的 2026-11-09 已作过的共用钥密码（public repo history 已 leak）；再生 key 并 update both secrets"
+            exit 1
+          fi
+
       - name: Build release APK
         run: flutter build apk --release --target-platform android-arm64
 
