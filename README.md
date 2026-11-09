@@ -9,6 +9,10 @@
 3. New Game
 4. Undo (rollback) the last move
 
+## 📋 紀錄
+
+進行中的待辦在 [TODO.md](TODO.md)，已完成的歸檔在 [CHANGELOG.md](CHANGELOG.md)。
+
 ## Run
 
 ```
