@@ -212,7 +212,8 @@ void main() {
     final board = readBoard(tester, 4);
     expect(board.length, 3);
 
-    // 重新開 app（同一份 prefs）→ 接續上次。
+    // 重新開 app（先 pump 空 widget 銷毀 State，模擬真重啟）→ 接續上次。
+    await tester.pumpWidget(const SizedBox());
     await tester.pumpWidget(Game2048App(settings: settings, prefs: prefs));
     await tester.pumpAndSettle();
     expect(readBoard(tester, 4), equals(board));
@@ -404,7 +405,8 @@ void main() {
     final board = readBoard(tester, 4);
     expect(board.length, 2);
 
-    // 重新開 app → 再按 Daily → 接續同一局（不是開新局）
+    // 重新開 app（先 pump 空 widget 銷毀 State，模擬真重啟）→ 再按 Daily → 接續同一局（不是開新局）
+    await tester.pumpWidget(const SizedBox());
     await tester.pumpWidget(Game2048App(settings: settings, prefs: prefs));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Daily'));
@@ -468,5 +470,30 @@ void main() {
     expect(secondTexts, contains('500'));
     tester.state<NavigatorState>(find.byType(Navigator)).pop();
     await tester.pumpAndSettle();
+  });
+
+  testWidgets('leaderboard dialog shows the picked board size', (tester) async {
+    final settings = await loadSettings();
+    final prefs = await SharedPreferences.getInstance();
+    await seedPlayer(prefs, 'A');
+    final storage = GameStorage(prefs);
+    await storage.setBestScore(4, 100);
+    await storage.setBestScore(6, 7);
+
+    await tester.pumpWidget(Game2048App(settings: settings, prefs: prefs));
+    await tester.pumpAndSettle();
+
+    // 開排行榜（finding 1：以前 layout 會 throw）
+    await tester.tap(find.byIcon(Icons.leaderboard));
+    await tester.pumpAndSettle();
+    expect(find.text('Leaderboard'), findsOneWidget);
+    // 預設 4×4 欄：A 100
+    expect(find.text('100'), findsOneWidget);
+
+    // 點 6×6 → list 切到 6×6 欄（finding 2：picker 以前不 stick）
+    await tester.tap(find.text('6×6'));
+    await tester.pumpAndSettle();
+    expect(find.text('7'), findsOneWidget);
+    expect(find.text('100'), findsNothing);
   });
 }

@@ -358,6 +358,12 @@ abstract class AppLocalizations {
   /// **'Daily'**
   String get daily;
 
+  /// No description provided for @normal.
+  ///
+  /// In en, this message translates to:
+  /// **'Normal'**
+  String get normal;
+
   /// No description provided for @dailyLeaderboard.
   ///
   /// In en, this message translates to:

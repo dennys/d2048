@@ -144,6 +144,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get daily => 'Daily';
 
   @override
+  String get normal => 'Normal';
+
+  @override
   String get dailyLeaderboard => 'Daily leaderboard';
 
   @override

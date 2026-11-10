@@ -59,7 +59,7 @@ gradle.properties —— 就是上面那兩行「added automatically by Flutter 
 注意 settings 裡 KGP 的 `version "2.4.0"` 那一行**先留著**（只删 app 的 `id("org.jetbrains.kotlin.android")`），
 等所有插件都遷移完再清；`kotlin { compilerOptions { jvmTarget } }` 已經是新寫法，不用動。
 
-**沒人試過**，所以先在最簡單的 d2048（只有 `lib/main.dart` 470 行、**零 native plugin**）試通，再複製到 dNeko／dHealth
+**沒人試過**，所以先在最簡單的 d2048（只有 `lib/main.dart`、**零 native plugin**）試通，再複製到 dNeko／dHealth
 （dNeko 的 `packages/flutter_overlay_window` 是本地 fork，得自己改；dHealth 十來個原生插件——
 awesome_notifications／workmanager／health／permission_handler／file_picker／share_plus——只能等上游）。
 方向（**尚未驗證**，以官方 guide 為準）：`android.builtInKotlin=true` + 拿掉 app 的 KGP plugin 行。

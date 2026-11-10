@@ -4,6 +4,15 @@ import '../generated/l10n/app_localizations.dart';
 import '../game_storage.dart';
 import '../settings_keys.dart';
 
+/// 排行榜列：rank（粗體前 3 名）、name、score。
+Widget _rankRow({required String rank, required String name, required String score, required bool bold}) =>
+    ListTile(
+      dense: true,
+      leading: Text(rank, style: TextStyle(fontWeight: bold ? FontWeight.bold : FontWeight.normal)),
+      title: Text(name),
+      trailing: Text(score),
+    );
+
 /// 家庭每日排行榜：今天（[todaySeed]）各玩家 daily 局最高分，高→低；沒玩的排最後。
 class DailyLeaderboardDialog extends StatelessWidget {
   final List<(String, GameStats)> rows; // (player, stats)
@@ -28,14 +37,11 @@ class DailyLeaderboardDialog extends StatelessWidget {
           itemBuilder: (context, i) {
             final (name, stats) = i < played.length ? played[i] : rest[i - played.length];
             final isPlayed = i < played.length;
-            return ListTile(
-              dense: true,
-              leading: Text(
-                isPlayed ? '${i + 1}' : '·',
-                style: TextStyle(fontWeight: i < 3 ? FontWeight.bold : FontWeight.normal),
-              ),
-              title: Text(name),
-              trailing: Text(isPlayed ? '${stats.dailyBest}' : l.notPlayed),
+            return _rankRow(
+              rank: isPlayed ? '${i + 1}' : '·',
+              name: name,
+              score: isPlayed ? '${stats.dailyBest}' : l.notPlayed,
+              bold: i < 3,
             );
           },
         ),
@@ -60,9 +66,9 @@ class LeaderboardDialog extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l = AppLocalizations.of(context)!;
+    var size = initialSize;
     return StatefulBuilder(
       builder: (context, setState) {
-        var size = initialSize;
         final entries = [
           for (final p in players)
             (p, bestScoreFor(p, size)),
@@ -81,14 +87,15 @@ class LeaderboardDialog extends StatelessWidget {
                     if (v != null) setState(() => size = v);
                   },
                   child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       for (final s in PrefsDefaults.boardSizeOptions)
-                        RadioListTile<int>(
-                          value: s,
-                          dense: true,
-                          contentPadding: EdgeInsets.zero,
-                          title: Text('$s×$s', style: const TextStyle(fontSize: 14)),
+                        Expanded(
+                          child: RadioListTile<int>(
+                            value: s,
+                            dense: true,
+                            contentPadding: EdgeInsets.zero,
+                            title: Text('$s×$s', style: const TextStyle(fontSize: 14)),
+                          ),
                         ),
                     ],
                   ),
@@ -103,14 +110,11 @@ class LeaderboardDialog extends StatelessWidget {
                             : entries.length,
                         itemBuilder: (context, i) {
                           final (name, score) = entries[i];
-                          return ListTile(
-                            dense: true,
-                            leading: Text(
-                              '${i + 1}',
-                              style: TextStyle(fontWeight: i < 3 ? FontWeight.bold : FontWeight.normal),
-                            ),
-                            title: Text(name),
-                            trailing: Text('$score'),
+                          return _rankRow(
+                            rank: '${i + 1}',
+                            name: name,
+                            score: '$score',
+                            bold: i < 3,
                           );
                         },
                       ),

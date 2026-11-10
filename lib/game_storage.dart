@@ -14,6 +14,21 @@ int dailySeedFor(DateTime d) => d.year * 10000 + d.month * 100 + d.day;
 /// board 上的一個方塊（序列化形式）。
 typedef TileData = ({int id, int value, int row, int col});
 
+/// TileData list → JSON map list（SavedGame／BoardSnapshot 共用，避免各寫一份）。
+List<Map<String, dynamic>> _tilesToJson(List<TileData> tiles) =>
+    [for (final t in tiles) {'id': t.id, 'value': t.value, 'row': t.row, 'col': t.col}];
+
+/// JSON list → TileData list（SavedGame／BoardSnapshot 共用）。
+List<TileData> _tilesFromJson(List<dynamic> json) => [
+      for (final t in json)
+        (
+          id: t['id'] as int,
+          value: t['value'] as int,
+          row: t['row'] as int,
+          col: t['col'] as int,
+        ),
+    ];
+
 /// 自動存檔：目前遊戲狀態（不含 history）。
 class SavedGame {
   final int boardSize;
@@ -22,7 +37,6 @@ class SavedGame {
   final int moves;
   final int undoCount;
   final bool keepPlaying; // 過關後使用者選擇繼續
-  final GameMode mode;
   final int? seed; // daily 局的 seed（normal 為 null）
 
   const SavedGame({
@@ -32,38 +46,27 @@ class SavedGame {
     required this.moves,
     required this.undoCount,
     required this.keepPlaying,
-    this.mode = GameMode.normal,
     this.seed,
   });
 
   Map<String, dynamic> toJson() => {
         'boardSize': boardSize,
-        'tiles': [for (final t in tiles) {'id': t.id, 'value': t.value, 'row': t.row, 'col': t.col}],
+        'tiles': _tilesToJson(tiles),
         'score': score,
         'moves': moves,
         'undoCount': undoCount,
         'keepPlaying': keepPlaying,
-        'mode': mode.name,
         if (seed != null) 'seed': seed,
       };
 
   factory SavedGame.fromJson(Map<String, dynamic> json) => SavedGame(
         boardSize: json['boardSize'] as int,
-        tiles: [
-          for (final t in json['tiles'] as List<dynamic>)
-            (
-              id: t['id'] as int,
-              value: t['value'] as int,
-              row: t['row'] as int,
-              col: t['col'] as int,
-            ),
-        ],
+        tiles: _tilesFromJson(json['tiles'] as List<dynamic>),
         score: json['score'] as int,
         // 可選欄位給預設值：舊版 build 寫的存檔缺欄位時不要整份丟掉（靜默資料流失）。
         moves: json['moves'] as int? ?? 0,
         undoCount: json['undoCount'] as int? ?? 0,
         keepPlaying: json['keepPlaying'] as bool? ?? false,
-        mode: GameMode.values.firstWhere((m) => m.name == json['mode'], orElse: () => GameMode.normal),
         seed: json['seed'] as int?,
       );
 }
@@ -87,7 +90,7 @@ class BoardSnapshot {
   Map<String, dynamic> toJson() => {
         'name': name,
         'boardSize': boardSize,
-        'tiles': [for (final t in tiles) {'id': t.id, 'value': t.value, 'row': t.row, 'col': t.col}],
+        'tiles': _tilesToJson(tiles),
         'score': score,
         'savedAt': savedAt.millisecondsSinceEpoch,
       };
@@ -95,15 +98,7 @@ class BoardSnapshot {
   factory BoardSnapshot.fromJson(Map<String, dynamic> json) => BoardSnapshot(
         name: json['name'] as String? ?? '',
         boardSize: json['boardSize'] as int,
-        tiles: [
-          for (final t in json['tiles'] as List<dynamic>)
-            (
-              id: t['id'] as int,
-              value: t['value'] as int,
-              row: t['row'] as int,
-              col: t['col'] as int,
-            ),
-        ],
+        tiles: _tilesFromJson(json['tiles'] as List<dynamic>),
         score: json['score'] as int? ?? 0,
         savedAt: DateTime.fromMillisecondsSinceEpoch(json['savedAt'] as int? ?? 0),
       );
@@ -210,8 +205,9 @@ class GameStorage {
     if (raw == null) return null;
     try {
       return SavedGame.fromJson(jsonDecode(raw) as Map<String, dynamic>);
-    } catch (_) {
-      return null; // 損毀存檔 → 當沒有，開新遊戲
+    } catch (e) {
+      debugPrint('d2048 saveGame undecodable: $e'); // 損毀存檔 → 當沒有，開新遊戲
+      return null;
     }
   }
 

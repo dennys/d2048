@@ -143,6 +143,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get daily => '每日';
 
   @override
+  String get normal => '普通';
+
+  @override
   String get dailyLeaderboard => '每日排行榜';
 
   @override
@@ -302,6 +305,9 @@ class AppLocalizationsZhHans extends AppLocalizationsZh {
   String get daily => '每日';
 
   @override
+  String get normal => '普通';
+
+  @override
   String get dailyLeaderboard => '每日排行榜';
 
   @override
@@ -459,6 +465,9 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
 
   @override
   String get daily => '每日';
+
+  @override
+  String get normal => '普通';
 
   @override
   String get dailyLeaderboard => '每日排行榜';

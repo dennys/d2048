@@ -2,6 +2,7 @@ import 'dart:io';
 import 'dart:math';
 import 'dart:ui' as ui;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show RenderRepaintBoundary;
 import 'package:flutter/services.dart';
@@ -119,7 +120,7 @@ class _GameScreenState extends State<GameScreen> {
     stats = storage.loadStats();
     final saved = storage.loadSavedGame(GameMode.normal);
     if (saved != null) {
-      _restoreSaved(saved); // 接續上次：靜止渲染，不播動畫
+      _restoreSaved(saved, GameMode.normal); // 接續上次：靜止渲染，不播動畫
     } else {
       size = widget.settings.boardSize;
       _initializeGame();
@@ -174,9 +175,9 @@ class _GameScreenState extends State<GameScreen> {
   }
 
   /// 從自動存檔接續：同一批 id、沒有 isNew/justMerged → 不播動畫。
-  void _restoreSaved(SavedGame saved) {
+  void _restoreSaved(SavedGame saved, GameMode mode) {
     size = saved.boardSize;
-    mode = saved.mode;
+    this.mode = mode;
     _seed = saved.seed;
     _dailyRng = (mode == GameMode.daily && saved.seed != null) ? Random(saved.seed) : null;
     tiles
@@ -301,7 +302,7 @@ class _GameScreenState extends State<GameScreen> {
       stats.wins++;
     }
     if (mode == GameMode.daily && score > stats.dailyBest) stats.dailyBest = score;
-    if (score > best) {
+    if (mode == GameMode.normal && score > best) {
       best = score;
       storage.setBestScore(size, best);
     }
@@ -354,7 +355,7 @@ class _GameScreenState extends State<GameScreen> {
   }
 
   _Snapshot _takeSnapshot() => _Snapshot(
-        [for (final t in tiles) if (!t.removed) (id: t.id, value: t.value, row: t.row, col: t.col)],
+        _tileData(),
         score,
         moves,
         won,
@@ -397,30 +398,41 @@ class _GameScreenState extends State<GameScreen> {
     _persist();
   }
 
-  /// 自動存檔 + 統計（fire-and-forget；每次狀態變更後呼叫）。
+  /// 自動存檔 + 統計：串接寫入（依序落盤，避免並發覆蓋）；每次狀態變更後呼叫。
+  Future<void> _pending = Future.value();
+
   void _persist() {
-    storage.saveGame(
-      SavedGame(
-        boardSize: size,
-        tiles: [for (final t in tiles) if (!t.removed) (id: t.id, value: t.value, row: t.row, col: t.col)],
-        score: score,
-        moves: moves,
-        undoCount: undoCount,
-        keepPlaying: keepPlaying,
-        mode: mode,
-        seed: _seed,
-      ),
-      mode,
+    final game = SavedGame(
+      boardSize: size,
+      tiles: _tileData(),
+      score: score,
+      moves: moves,
+      undoCount: undoCount,
+      keepPlaying: keepPlaying,
+      seed: _seed,
     );
-    storage.saveStats(stats);
+    final mode = this.mode;
+    _pending = _pending.then((_) async {
+      await storage.saveGame(game, mode);
+      await storage.saveStats(stats);
+    });
   }
 
-  /// 每日局：seed = 今天日期 → 全家同開局 2 格；今天已有局就接續。
-  void _startDaily() {
+  /// 目前 board 的 TileData（不含已移除的合併殘骸）。
+  List<TileData> _tileData() =>
+      [for (final t in tiles) if (!t.removed) (id: t.id, value: t.value, row: t.row, col: t.col)];
+
+  /// Daily／普通局切換：切走前先把目前局存盤，再載入另一格。
+  void _toggleDaily() {
+    _persist(); // 存目前局（切走前）
+    if (mode == GameMode.daily) {
+      _restoreNormal();
+      return;
+    }
     final seed = dailySeedFor(DateTime.now());
     final saved = storage.loadSavedGame(GameMode.daily);
     if (saved != null && saved.seed == seed) {
-      setState(() => _restoreSaved(saved));
+      setState(() => _restoreSaved(saved, GameMode.daily));
       return;
     }
     if (stats.lastDailyDate != seed) {
@@ -428,6 +440,16 @@ class _GameScreenState extends State<GameScreen> {
       stats.dailyBest = 0; // 新的一天 → 重算今日最高
     }
     setState(() => _initializeGame(mode: GameMode.daily, seed: seed));
+  }
+
+  /// 回到普通局：有存檔就接續，沒有就開新局。
+  void _restoreNormal() {
+    final saved = storage.loadSavedGame(GameMode.normal);
+    if (saved != null) {
+      setState(() => _restoreSaved(saved, GameMode.normal));
+    } else {
+      setState(() => _initializeGame());
+    }
   }
 
   /// 家庭每日排行榜。
@@ -485,24 +507,26 @@ class _GameScreenState extends State<GameScreen> {
 
   Future<void> _shareText() async {
     final l = AppLocalizations.of(context)!;
+    final maxTile = tiles.where((t) => !t.removed).fold(0, (m, t) => t.value > m ? t.value : m);
     await SharePlus.instance.share(ShareParams(
       text:
           'd2048 — ${storage.currentPlayer}\n'
           '${l.score}: $score\n'
           '${l.best}: $best\n'
           '${l.moves}: $moves\n'
-          '${l.maxTile}: $_gameMaxTile',
+          '${l.maxTile}: $maxTile',
     ));
   }
 
   Future<void> _shareScreenshot() async {
+    if (kIsWeb) return; // dart:io File 在 web 不可用
     final boundary = _boardBoundaryKey.currentContext?.findRenderObject() as RenderRepaintBoundary?;
     if (boundary == null) return;
     final image = await boundary.toImage(pixelRatio: 3.0);
     final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
     if (bytes == null) return;
-    final file = File('${Directory.systemTemp.path}/d2048_${DateTime.now().millisecondsSinceEpoch}.png')
-      ..writeAsBytesSync(bytes.buffer.asUint8List());
+    final file = File('${Directory.systemTemp.path}/d2048_share.png');
+    await file.writeAsBytes(bytes.buffer.asUint8List());
     await SharePlus.instance.share(ShareParams(files: [XFile(file.path)]));
   }
 
@@ -524,7 +548,7 @@ class _GameScreenState extends State<GameScreen> {
     snapshots.add(BoardSnapshot(
       name: name,
       boardSize: size,
-      tiles: [for (final t in tiles) if (!t.removed) (id: t.id, value: t.value, row: t.row, col: t.col)],
+      tiles: _tileData(),
       score: score,
       savedAt: now,
     ));
@@ -609,7 +633,7 @@ class _GameScreenState extends State<GameScreen> {
       builder: (dialogContext) => AlertDialog(
         title: Text(l.selectBoardSize),
         content: RadioGroup<int>(
-          groupValue: size,
+          groupValue: null,
           onChanged: (v) => Navigator.pop(dialogContext, v),
           child: SizedBox(
             width: 200,
@@ -867,8 +891,8 @@ class _GameScreenState extends State<GameScreen> {
                       ),
                       const SizedBox(width: 8),
                       ElevatedButton(
-                        onPressed: _startDaily,
-                        child: Text(l.daily),
+                        onPressed: _toggleDaily,
+                        child: Text(mode == GameMode.daily ? l.normal : l.daily),
                       ),
                     ],
                   ),
