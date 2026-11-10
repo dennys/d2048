@@ -5,6 +5,33 @@
 新的完成紀錄加在最上面。
 
 ---
+## 2026-11-10 Code review 修正（REVIEW.md 16 項全清，review 檔已併入本檔）
+
+Read-only review（`REVIEW.md`，已刪）對 main + working tree 的 16 項發現，全部處理完。
+
+- **Must fix**
+  - 右/下方向方塊互相穿越（`_move` 對 right/down 改從目標邊收線，tile 順序才和 `_applyLine` 打包方向一致）
+  - resume／載入快照後 tile id 碰撞（`_nextId` 每次啟動從 1 起 → `ValueKey` 重複；修法：還原後 `_syncNextId()`）
+  - undo 過關那手 → `You win!` overlay 鎖死 board（`_Snapshot` 帶 `won`/`keepPlaying`）
+  - 存檔格式變更靜默丟檔（`SavedGame.fromJson` 對 `moves`/`undoCount` 給預設值；`tiles`/`score`/`boardSize` 保留 hard cast）
+  - 全部功能只在 working tree → checkpoint commit 先入版控
+- **Should fix**
+  - 測試補右/下合併規則（確定性棋盤 seed；原 merge 測試在 `Random(42)` 下初始兩方塊不同行、根本沒發生合併，是平凡通過）
+  - undo 計數回滾（`_Snapshot` 帶 `moves`/`totalMerges`/`wins`；`best`/`maxTile` 是 high-water mark 不滾）
+  - README 註明 arm64-only（x86-64 模擬器裝了開不起來）
+  - CI 沒 keystore secrets 時 artifact 加 `-debugsigned` 後綴（debug 簽章每版簽名不同，不能覆蓋升級）
+  - workflow 比對已作廢共用钥密碼改用 sha256 hash（明文不再進檔；11/9 已換鑰，純衛生）
+  - 刪 dead `com/example/d2048/MainActivity.kt`（manifest 指 `com.dennys.d2048`）
+  - `GameStorage` 四個 setter 加 try/catch（寫入失敗不再靜默）
+- **Nice to have**
+  - 4096+ 方塊四檔紅循環（原全部同色）
+  - `Locale.fromSubtags(scriptCode:)` 取代 `Locale('zh','Hans')`（第二參是 region 不是 script）
+  - `SettingsModel.load(prefs)` 傳入同一份 instance（main 不再多一次 `getInstance`）
+  - 刪未引用的 `assets/icon/*.png`（mipmap 已 commit，source 在 git history 可找回）
+- 驗收：`flutter analyze` No issues、`flutter test` 10/10（原 8 + 右/下合併；新方向測試對舊邏輯實測 fail）。
+- 未做（依指示）：iOS/macOS/Linux/Windows 建置路徑、真機、CI 日志；dNeko/dHealth 的同一明文 literal（`dNeko/.github/workflows/github_action.yaml:99`、`dHealth/...:132`）。
+
+---
 ## 2026-11-10 自動存檔、快照、最高分、過關、redo、震動、統計
 
 - **自動存檔／接續**（`lib/game_storage.dart`）：每次狀態變更（移動／undo／redo／載入快照／新遊戲）fire-and-forget 存 `SavedGame`（boardSize/tiles/score/moves/undoCount/keepPlaying，不含 history）；`initState` 有存檔就 `_restoreSaved`（同一批 tile id、無 isNew/justMerged → 靜止渲染不播動畫），沒有才開新遊戲。
