@@ -496,4 +496,22 @@ void main() {
     expect(find.text('7'), findsOneWidget);
     expect(find.text('100'), findsNothing);
   });
+
+  testWidgets('board tiles stay inside the board frame', (tester) async {
+    final settings = await loadSettings();
+    final prefs = await SharedPreferences.getInstance();
+    await seedPlayer(prefs);
+    await seedBoard(prefs, [(id: 1, value: 2, row: 3, col: 3)]);
+    await tester.pumpWidget(Game2048App(settings: settings, prefs: prefs));
+    await tester.pumpAndSettle();
+
+    final frame = tester.getRect(find.byType(AspectRatio));
+    final tiles = find.byType(AnimatedPositioned);
+    expect(tiles, findsWidgets);
+    for (var i = 0; i < tiles.evaluate().length; i++) {
+      final rect = tester.getRect(tiles.at(i));
+      expect(frame.contains(rect.topLeft), isTrue);
+      expect(frame.contains(rect.bottomRight), isTrue);
+    }
+  });
 }

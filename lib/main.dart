@@ -99,6 +99,7 @@ class _GameScreenState extends State<GameScreen> {
   int _celebrateKey = 0; // 慶祝動畫重開的 key
   bool _awaitingPlayer = false; // 首次啟動：等輸入玩家名字
   final GlobalKey _boardBoundaryKey = GlobalKey(); // board 截圖用
+  final GlobalKey _scoreBoundaryKey = GlobalKey(); // 分數區截圖用（分享截圖含分數）
   static const _milestones = [1024, 2048, 4096];
 
   @override
@@ -520,14 +521,38 @@ class _GameScreenState extends State<GameScreen> {
 
   Future<void> _shareScreenshot() async {
     if (kIsWeb) return; // dart:io File 在 web 不可用
-    final boundary = _boardBoundaryKey.currentContext?.findRenderObject() as RenderRepaintBoundary?;
-    if (boundary == null) return;
-    final image = await boundary.toImage(pixelRatio: 3.0);
-    final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
+    final background = Theme.of(context).scaffoldBackgroundColor;
+    final scoreImage = await _captureBoundary(_scoreBoundaryKey);
+    final boardImage = await _captureBoundary(_boardBoundaryKey);
+    if (scoreImage == null || boardImage == null) return;
+
+    // 分數區在上、棋盤在下，合成一張圖（背景用目前主題底色）
+    final width = scoreImage.width > boardImage.width ? scoreImage.width : boardImage.width;
+    final height = scoreImage.height + boardImage.height;
+    final recorder = ui.PictureRecorder();
+    final canvas = ui.Canvas(recorder);
+    canvas.drawRect(
+      ui.Rect.fromLTWH(0, 0, width.toDouble(), height.toDouble()),
+      ui.Paint()..color = background,
+    );
+    canvas.drawImage(scoreImage, ui.Offset.zero, ui.Paint());
+    canvas.drawImage(
+      boardImage,
+      ui.Offset((width - boardImage.width) / 2, scoreImage.height.toDouble()),
+      ui.Paint(),
+    );
+    final merged = await recorder.endRecording().toImage(width, height);
+    final bytes = await merged.toByteData(format: ui.ImageByteFormat.png);
     if (bytes == null) return;
     final file = File('${Directory.systemTemp.path}/d2048_share.png');
     await file.writeAsBytes(bytes.buffer.asUint8List());
     await SharePlus.instance.share(ShareParams(files: [XFile(file.path)]));
+  }
+
+  Future<ui.Image?> _captureBoundary(GlobalKey key) async {
+    final boundary = key.currentContext?.findRenderObject() as RenderRepaintBoundary?;
+    if (boundary == null) return null;
+    return boundary.toImage(pixelRatio: 3.0);
   }
 
   /// 存快照：命名對話框 → 加入 list（上限 [PrefsDefaults.snapshotLimit]）。
@@ -700,7 +725,8 @@ class _GameScreenState extends State<GameScreen> {
   Widget _buildBoard() {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final side = constraints.biggest.shortestSide;
+        // 外層 Container 的 margin 8 + padding 8 四邊共吃 32，棋盤要扣掉，否則右／下會超出
+        final side = constraints.biggest.shortestSide - 32;
         final gap = 8.0;
         final cell = (side - gap * (size + 1)) / size;
         return Container(
@@ -837,19 +863,22 @@ class _GameScreenState extends State<GameScreen> {
                       Stack(
                         clipBehavior: Clip.none,
                         children: [
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                '${l.score}: $score',
-                                style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-                              ),
-                              Text('${l.best}: $best', style: TextStyle(color: Colors.grey[700])),
-                              Text(
-                                '${l.moves}: $moves  ${l.undoCount(undoCount)}',
-                                style: TextStyle(color: Colors.grey[700]),
-                              ),
-                            ],
+                          RepaintBoundary(
+                            key: _scoreBoundaryKey,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  '${l.score}: $score',
+                                  style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+                                ),
+                                Text('${l.best}: $best', style: TextStyle(color: Colors.grey[700])),
+                                Text(
+                                  '${l.moves}: $moves  ${l.undoCount(undoCount)}',
+                                  style: TextStyle(color: Colors.grey[700]),
+                                ),
+                              ],
+                            ),
                           ),
                           if (_gain > 0)
                             Positioned(right: 0, top: 0, child: _gainPopup()),

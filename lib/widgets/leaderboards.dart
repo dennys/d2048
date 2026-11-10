@@ -81,24 +81,17 @@ class LeaderboardDialog extends StatelessWidget {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                RadioGroup<int>(
-                  groupValue: size,
-                  onChanged: (v) {
-                    if (v != null) setState(() => size = v);
-                  },
-                  child: Row(
-                    children: [
-                      for (final s in PrefsDefaults.boardSizeOptions)
-                        Expanded(
-                          child: RadioListTile<int>(
-                            value: s,
-                            dense: true,
-                            contentPadding: EdgeInsets.zero,
-                            title: Text('$s×$s', style: const TextStyle(fontSize: 14)),
-                          ),
-                        ),
-                    ],
-                  ),
+                SegmentedButton<int>(
+                  showSelectedIcon: false,
+                  segments: [
+                    for (final s in PrefsDefaults.boardSizeOptions)
+                      ButtonSegment<int>(
+                        value: s,
+                        label: Text('$s×$s', style: const TextStyle(fontSize: 13)),
+                      ),
+                  ],
+                  selected: {size},
+                  onSelectionChanged: (v) => setState(() => size = v.first),
                 ),
                 const Divider(),
                 entries.isEmpty
