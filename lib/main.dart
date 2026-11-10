@@ -1,7 +1,11 @@
+import 'dart:io';
 import 'dart:math';
+import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show RenderRepaintBoundary;
 import 'package:flutter/services.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'game_storage.dart';
@@ -9,6 +13,8 @@ import 'generated/l10n/app_localizations.dart';
 import 'settings_keys.dart';
 import 'settings_model.dart';
 import 'tile_style.dart';
+import 'widgets/leaderboards.dart';
+import 'widgets/players.dart';
 import 'widgets/settings_screen.dart';
 import 'widgets/snapshots.dart';
 
@@ -84,12 +90,34 @@ class _GameScreenState extends State<GameScreen> {
   late final Random random = widget.random ?? Random();
   int _nextId = 1;
 
+  GameMode mode = GameMode.normal;
+  int? _seed; // daily 局的 seed
+  Random? _dailyRng; // daily 局用 seeded RNG（同 seed → 同開局）
+  int _gameMaxTile = 0; // 本局最大方塊（里程碑偵測用）
+  int _celebrateTile = 0; // 正在慶祝的方塊值（0 = 無）
+  int _celebrateKey = 0; // 慶祝動畫重開的 key
+  bool _awaitingPlayer = false; // 首次啟動：等輸入玩家名字
+  final GlobalKey _boardBoundaryKey = GlobalKey(); // board 截圖用
+  static const _milestones = [1024, 2048, 4096];
+
   @override
   void initState() {
     super.initState();
     storage = GameStorage(widget.prefs);
+    if (storage.loadPlayers().isEmpty) {
+      _awaitingPlayer = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _askPlayerName();
+      });
+    } else {
+      _loadForCurrentPlayer();
+    }
+  }
+
+  /// 載入目前玩家的資料（統計 + 普通局自動存檔）。
+  void _loadForCurrentPlayer() {
     stats = storage.loadStats();
-    final saved = storage.loadSavedGame();
+    final saved = storage.loadSavedGame(GameMode.normal);
     if (saved != null) {
       _restoreSaved(saved); // 接續上次：靜止渲染，不播動畫
     } else {
@@ -98,7 +126,34 @@ class _GameScreenState extends State<GameScreen> {
     }
   }
 
-  void _initializeGame() {
+  /// 首次啟動：輸入玩家名字。
+  Future<void> _askPlayerName() async {
+    final name = await showPlayerNameDialog(context);
+    if (name == null || !mounted) return;
+    await storage.addPlayer(name);
+    setState(() {
+      _awaitingPlayer = false;
+      _loadForCurrentPlayer();
+    });
+  }
+
+  /// AppBar 玩家名 tap → 切換／新增玩家。
+  Future<void> _switchPlayer() async {
+    final chosen = await showPlayerPicker(
+      context,
+      players: storage.loadPlayers(),
+      current: storage.currentPlayer,
+      onAdd: storage.addPlayer,
+    );
+    if (chosen == null || !mounted || chosen == storage.currentPlayer) return;
+    await storage.setCurrentPlayer(chosen);
+    setState(_loadForCurrentPlayer);
+  }
+
+  void _initializeGame({GameMode mode = GameMode.normal, int? seed}) {
+    this.mode = mode;
+    _seed = seed;
+    _dailyRng = (mode == GameMode.daily && seed != null) ? Random(seed) : null;
     tiles.clear();
     history.clear();
     redoStack.clear();
@@ -110,6 +165,7 @@ class _GameScreenState extends State<GameScreen> {
     keepPlaying = false;
     gameOver = false;
     _gain = 0;
+    _gameMaxTile = 0;
     _addRandomTile();
     _addRandomTile();
     stats.gamesPlayed++;
@@ -120,6 +176,9 @@ class _GameScreenState extends State<GameScreen> {
   /// 從自動存檔接續：同一批 id、沒有 isNew/justMerged → 不播動畫。
   void _restoreSaved(SavedGame saved) {
     size = saved.boardSize;
+    mode = saved.mode;
+    _seed = saved.seed;
+    _dailyRng = (mode == GameMode.daily && saved.seed != null) ? Random(saved.seed) : null;
     tiles
       ..clear()
       ..addAll([for (final t in saved.tiles) Tile(id: t.id, value: t.value, row: t.row, col: t.col)]);
@@ -130,6 +189,7 @@ class _GameScreenState extends State<GameScreen> {
     won = tiles.any((t) => t.value >= 2048);
     keepPlaying = saved.keepPlaying;
     gameOver = !_canMove();
+    _gameMaxTile = tiles.fold(0, (m, t) => t.value > m ? t.value : m);
     _syncNextId();
   }
 
@@ -137,13 +197,14 @@ class _GameScreenState extends State<GameScreen> {
   void _syncNextId() => _nextId = tiles.fold(1, (m, t) => t.id > m ? t.id : m) + 1;
 
   void _addRandomTile() {
+    final rng = _dailyRng ?? random;
     final occupied = <int>{for (final t in tiles) if (!t.removed) t.row * size + t.col};
     final empty = <int>[for (var i = 0; i < size * size; i++) if (!occupied.contains(i)) i];
     if (empty.isEmpty) return;
-    final p = empty[random.nextInt(empty.length)];
+    final p = empty[rng.nextInt(empty.length)];
     tiles.add(Tile(
       id: _nextId++,
-      value: random.nextDouble() < 0.9 ? 2 : 4,
+      value: rng.nextDouble() < 0.9 ? 2 : 4,
       row: p ~/ size,
       col: p % size,
       isNew: true,
@@ -223,12 +284,23 @@ class _GameScreenState extends State<GameScreen> {
     for (final t in tiles) {
       if (!t.removed && t.value > maxTile) maxTile = t.value;
     }
+    if (maxTile > _gameMaxTile) {
+      _gameMaxTile = maxTile;
+      if (_milestones.contains(maxTile)) {
+        _celebrateTile = maxTile;
+        _celebrateKey++;
+        Future.delayed(const Duration(milliseconds: 1600), () {
+          if (mounted) setState(() => _celebrateTile = 0);
+        });
+      }
+    }
     if (maxTile > stats.maxTile) stats.maxTile = maxTile;
     if (!won && maxTile >= 2048) {
       won = true;
       keepPlaying = false; // 新過關 → 顯示 overlay（載入快照時 keepPlaying=true 不重播）
       stats.wins++;
     }
+    if (mode == GameMode.daily && score > stats.dailyBest) stats.dailyBest = score;
     if (score > best) {
       best = score;
       storage.setBestScore(size, best);
@@ -327,15 +399,111 @@ class _GameScreenState extends State<GameScreen> {
 
   /// 自動存檔 + 統計（fire-and-forget；每次狀態變更後呼叫）。
   void _persist() {
-    storage.saveGame(SavedGame(
-      boardSize: size,
-      tiles: [for (final t in tiles) if (!t.removed) (id: t.id, value: t.value, row: t.row, col: t.col)],
-      score: score,
-      moves: moves,
-      undoCount: undoCount,
-      keepPlaying: keepPlaying,
-    ));
+    storage.saveGame(
+      SavedGame(
+        boardSize: size,
+        tiles: [for (final t in tiles) if (!t.removed) (id: t.id, value: t.value, row: t.row, col: t.col)],
+        score: score,
+        moves: moves,
+        undoCount: undoCount,
+        keepPlaying: keepPlaying,
+        mode: mode,
+        seed: _seed,
+      ),
+      mode,
+    );
     storage.saveStats(stats);
+  }
+
+  /// 每日局：seed = 今天日期 → 全家同開局 2 格；今天已有局就接續。
+  void _startDaily() {
+    final seed = dailySeedFor(DateTime.now());
+    final saved = storage.loadSavedGame(GameMode.daily);
+    if (saved != null && saved.seed == seed) {
+      setState(() => _restoreSaved(saved));
+      return;
+    }
+    if (stats.lastDailyDate != seed) {
+      stats.lastDailyDate = seed;
+      stats.dailyBest = 0; // 新的一天 → 重算今日最高
+    }
+    setState(() => _initializeGame(mode: GameMode.daily, seed: seed));
+  }
+
+  /// 家庭每日排行榜。
+  Future<void> _showDailyLeaderboard() async {
+    final rows = [
+      for (final p in storage.loadPlayers()) (p, storage.loadStatsFor(p)),
+    ];
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) =>
+          DailyLeaderboardDialog(rows: rows, todaySeed: dailySeedFor(DateTime.now())),
+    );
+  }
+
+  /// 本地排行榜（每格數 top N，跨玩家）。
+  Future<void> _showLeaderboard() async {
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => LeaderboardDialog(
+        players: storage.loadPlayers(),
+        bestScoreFor: storage.bestScoreFor,
+        initialSize: size,
+      ),
+    );
+  }
+
+  /// 分享：文字或 board 截圖。
+  Future<void> _showShareDialog() async {
+    final l = AppLocalizations.of(context)!;
+    final choice = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(l.share),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, 'text'),
+              child: Text(l.shareText),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, 'image'),
+              child: Text(l.shareScreenshot),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (choice == 'text') {
+      await _shareText();
+    } else if (choice == 'image') {
+      await _shareScreenshot();
+    }
+  }
+
+  Future<void> _shareText() async {
+    final l = AppLocalizations.of(context)!;
+    await SharePlus.instance.share(ShareParams(
+      text:
+          'd2048 — ${storage.currentPlayer}\n'
+          '${l.score}: $score\n'
+          '${l.best}: $best\n'
+          '${l.moves}: $moves\n'
+          '${l.maxTile}: $_gameMaxTile',
+    ));
+  }
+
+  Future<void> _shareScreenshot() async {
+    final boundary = _boardBoundaryKey.currentContext?.findRenderObject() as RenderRepaintBoundary?;
+    if (boundary == null) return;
+    final image = await boundary.toImage(pixelRatio: 3.0);
+    final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
+    if (bytes == null) return;
+    final file = File('${Directory.systemTemp.path}/d2048_${DateTime.now().millisecondsSinceEpoch}.png')
+      ..writeAsBytesSync(bytes.buffer.asUint8List());
+    await SharePlus.instance.share(ShareParams(files: [XFile(file.path)]));
   }
 
   /// 存快照：命名對話框 → 加入 list（上限 [PrefsDefaults.snapshotLimit]）。
@@ -385,6 +553,9 @@ class _GameScreenState extends State<GameScreen> {
   void _loadSnapshot(BoardSnapshot s) {
     setState(() {
       size = s.boardSize;
+      mode = GameMode.normal;
+      _seed = null;
+      _dailyRng = null;
       tiles
         ..clear()
         ..addAll([for (final t in s.tiles) Tile(id: t.id, value: t.value, row: t.row, col: t.col)]);
@@ -398,6 +569,7 @@ class _GameScreenState extends State<GameScreen> {
       gameOver = !_canMove();
       best = storage.bestScore(size);
       _gain = 0;
+      _gameMaxTile = tiles.fold(0, (m, t) => t.value > m ? t.value : m);
       _persist();
       _syncNextId();
     });
@@ -564,11 +736,55 @@ class _GameScreenState extends State<GameScreen> {
   @override
   Widget build(BuildContext context) {
     final l = AppLocalizations.of(context)!;
+    if (_awaitingPlayer) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('2048')),
+        body: Center(
+          child: ElevatedButton(
+            onPressed: _askPlayerName,
+            child: Text(l.whoIsPlaying),
+          ),
+        ),
+      );
+    }
     return Scaffold(
       appBar: AppBar(
-        title: const Text('2048'),
+        title: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('2048'),
+            const SizedBox(width: 8),
+            // 目前玩家：tap 切換／新增
+            InkWell(
+              onTap: _switchPlayer,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.person_outline, size: 18),
+                  const SizedBox(width: 4),
+                  Text(storage.currentPlayer),
+                ],
+              ),
+            ),
+          ],
+        ),
         centerTitle: true,
         actions: [
+          IconButton(
+            icon: const Icon(Icons.emoji_events_outlined),
+            tooltip: l.dailyLeaderboard,
+            onPressed: _showDailyLeaderboard,
+          ),
+          IconButton(
+            icon: const Icon(Icons.leaderboard),
+            tooltip: l.leaderboard,
+            onPressed: _showLeaderboard,
+          ),
+          IconButton(
+            icon: const Icon(Icons.share_outlined),
+            tooltip: l.share,
+            onPressed: _showShareDialog,
+          ),
           IconButton(
             icon: const Icon(Icons.settings_outlined),
             tooltip: l.settings,
@@ -581,7 +797,9 @@ class _GameScreenState extends State<GameScreen> {
           ),
         ],
       ),
-      body: SafeArea(
+      body: Stack(
+        children: [
+          SafeArea(
         child: Column(
           children: [
             // Score / best / moves / undo count + snapshot buttons
@@ -647,6 +865,11 @@ class _GameScreenState extends State<GameScreen> {
                         onPressed: () => _newGame(),
                         child: Text(l.newGame),
                       ),
+                      const SizedBox(width: 8),
+                      ElevatedButton(
+                        onPressed: _startDaily,
+                        child: Text(l.daily),
+                      ),
                     ],
                   ),
                 ],
@@ -661,7 +884,7 @@ class _GameScreenState extends State<GameScreen> {
                   child: GestureDetector(
                     onVerticalDragEnd: (details) => _swipe(details.velocity),
                     onHorizontalDragEnd: (details) => _swipe(details.velocity),
-                    child: _buildBoard(),
+                    child: RepaintBoundary(key: _boardBoundaryKey, child: _buildBoard()),
                   ),
                 ),
               ),
@@ -735,6 +958,36 @@ class _GameScreenState extends State<GameScreen> {
             ),
           ],
         ),
+          ),
+        // 里程碑慶祝（1024/2048/4096）：全屏動畫，1.6 秒後自動消失
+        if (_celebrateTile > 0)
+          IgnorePointer(
+            child: TweenAnimationBuilder<double>(
+              key: ValueKey(_celebrateKey),
+              tween: Tween(begin: 0.0, end: 1.0),
+              duration: const Duration(milliseconds: 1500),
+              builder: (context, t, child) {
+                final scale = t < 0.2 ? 0.5 + t / 0.2 * 0.5 : 1.0;
+                final opacity = t > 0.7 ? (1 - t) / 0.3 : 1.0;
+                return Center(
+                  child: Opacity(
+                    opacity: opacity,
+                    child: Transform.scale(scale: scale, child: child),
+                  ),
+                );
+              },
+              child: Text(
+                '$_celebrateTile!',
+                style: TextStyle(
+                  color: Colors.amber,
+                  fontSize: 64,
+                  fontWeight: FontWeight.bold,
+                  shadows: const [Shadow(color: Colors.black54, blurRadius: 8)],
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

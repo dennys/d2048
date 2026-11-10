@@ -35,5 +35,19 @@
   "gamesPlayed": "局數",
   "wins": "勝場",
   "maxTile": "最大方塊",
-  "totalMerges": "總合併數"
+  "totalMerges": "總合併數",
+  "players": "玩家",
+  "whoIsPlaying": "誰在玩？",
+  "yourName": "你的名字",
+  "addPlayer": "新玩家名字",
+  "add": "新增",
+  "switchPlayer": "切換玩家",
+  "daily": "每日",
+  "dailyLeaderboard": "每日排行榜",
+  "leaderboard": "排行榜",
+  "notPlayed": "—",
+  "noScores": "還沒有分數",
+  "share": "分享",
+  "shareText": "分享文字",
+  "shareScreenshot": "分享截圖"
 }

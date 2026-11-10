@@ -49,5 +49,19 @@
   "gamesPlayed": "Games played",
   "wins": "Wins",
   "maxTile": "Best tile",
-  "totalMerges": "Total merges"
+  "totalMerges": "Total merges",
+  "players": "Players",
+  "whoIsPlaying": "Who's playing?",
+  "yourName": "Your name",
+  "addPlayer": "New player name",
+  "add": "Add",
+  "switchPlayer": "Switch player",
+  "daily": "Daily",
+  "dailyLeaderboard": "Daily leaderboard",
+  "leaderboard": "Leaderboard",
+  "notPlayed": "—",
+  "noScores": "No scores yet",
+  "share": "Share",
+  "shareText": "Share text",
+  "shareScreenshot": "Share screenshot"
 }

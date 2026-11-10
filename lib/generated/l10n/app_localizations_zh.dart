@@ -120,6 +120,48 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get totalMerges => '總合併數';
+
+  @override
+  String get players => '玩家';
+
+  @override
+  String get whoIsPlaying => '誰在玩？';
+
+  @override
+  String get yourName => '你的名字';
+
+  @override
+  String get addPlayer => '新玩家名字';
+
+  @override
+  String get add => '新增';
+
+  @override
+  String get switchPlayer => '切換玩家';
+
+  @override
+  String get daily => '每日';
+
+  @override
+  String get dailyLeaderboard => '每日排行榜';
+
+  @override
+  String get leaderboard => '排行榜';
+
+  @override
+  String get notPlayed => '—';
+
+  @override
+  String get noScores => '還沒有分數';
+
+  @override
+  String get share => '分享';
+
+  @override
+  String get shareText => '分享文字';
+
+  @override
+  String get shareScreenshot => '分享截圖';
 }
 
 /// The translations for Chinese, using the Han script (`zh_Hans`).
@@ -237,6 +279,48 @@ class AppLocalizationsZhHans extends AppLocalizationsZh {
 
   @override
   String get totalMerges => '总合并数';
+
+  @override
+  String get players => '玩家';
+
+  @override
+  String get whoIsPlaying => '谁在玩？';
+
+  @override
+  String get yourName => '你的名字';
+
+  @override
+  String get addPlayer => '新玩家名字';
+
+  @override
+  String get add => '新增';
+
+  @override
+  String get switchPlayer => '切换玩家';
+
+  @override
+  String get daily => '每日';
+
+  @override
+  String get dailyLeaderboard => '每日排行榜';
+
+  @override
+  String get leaderboard => '排行榜';
+
+  @override
+  String get notPlayed => '—';
+
+  @override
+  String get noScores => '还没有分数';
+
+  @override
+  String get share => '分享';
+
+  @override
+  String get shareText => '分享文字';
+
+  @override
+  String get shareScreenshot => '分享截图';
 }
 
 /// The translations for Chinese, using the Han script (`zh_Hant`).
@@ -354,4 +438,46 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
 
   @override
   String get totalMerges => '總合併數';
+
+  @override
+  String get players => '玩家';
+
+  @override
+  String get whoIsPlaying => '誰在玩？';
+
+  @override
+  String get yourName => '你的名字';
+
+  @override
+  String get addPlayer => '新玩家名字';
+
+  @override
+  String get add => '新增';
+
+  @override
+  String get switchPlayer => '切換玩家';
+
+  @override
+  String get daily => '每日';
+
+  @override
+  String get dailyLeaderboard => '每日排行榜';
+
+  @override
+  String get leaderboard => '排行榜';
+
+  @override
+  String get notPlayed => '—';
+
+  @override
+  String get noScores => '還沒有分數';
+
+  @override
+  String get share => '分享';
+
+  @override
+  String get shareText => '分享文字';
+
+  @override
+  String get shareScreenshot => '分享截圖';
 }

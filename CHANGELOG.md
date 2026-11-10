@@ -5,6 +5,18 @@
 新的完成紀錄加在最上面。
 
 ---
+## 2026-11-10 功能 backlog 5 項：per-player／每日排行榜／里程碑慶祝／分享／本地排行榜
+
+- **Per-player Profiles**（`lib/game_storage.dart`、`lib/widgets/players.dart`）：遊戲資料全部按玩家 namespace（`saved_game/<player>`、`saved_game_daily/<player>`、`snapshots/<player>`、`best_scores/<player>`、`stats/<player>`）+ `players`（name list）+ `current_player`。首次啟動輸入名字（placeholder 畫面 + dialog，取消可重按）；AppBar 玩家 chip（person icon + 名字）tap 切換／新增。遷移：舊全域 4 個 key 首次跑新 code 時搬進預設玩家 `"Player"` 並刪舊 key（`players` key 存在即跳過，只跑一次）。
+- **家庭 Daily Leaderboard**（`GameMode.daily`、`dailySeedFor`）：seed = 本地日期（如 20261110）；daily 局用 `Random(seed)` → 全家同開局 2 格，走第一步後各自分岔（Wordle 式）；daily 局獨立存檔（`saved_game_daily/<player>`；`SavedGame` 加 `mode`/`seed` 欄位，舊存檔缺欄位預設 normal）；`GameStats` 加 `dailyBest`/`lastDailyDate`（新的一天重置）。Daily 按鈕開／接續今天的局；trophy 按鈕開排行榜（今日分數高→低，沒玩的排最後）。
+- **里程碑慶祝**：本局最大方塊跨過 1024/2048/4096 → 全屏 scale-in + fade-out 動畫（1.5 秒、1.6 秒後自動消失、`IgnorePointer` 不擋過關 overlay 的按鈕）。
+- **分享成績**（`share_plus` 13.3.1）：share 對話框 → 文字（玩家/score/best/moves/max tile）或 board 截圖（`RepaintBoundary` → PNG → temp file）。13.x 的 gradle 已相容 AGP 9 built-in Kotlin（10.x 無條件套 KGP 會被擋）。
+- **本地排行榜**（`lib/widgets/leaderboards.dart`）：podium 按鈕，每格數 top 10（跨玩家，`bestScoreFor`），RadioGroup 切格數。
+- **l10n**：14 個新字串（players/whoIsPlaying/yourName/addPlayer/add/switchPlayer/daily/dailyLeaderboard/leaderboard/notPlayed/noScores/share/shareText/shareScreenshot），4 個 arb + `flutter gen-l10n`。
+- **dgx1 build 修復**：AGP 9 built-in Kotlin 下，新 plugin（shared_preferences_android 2.5.x、path_provider_android 2.3.x）走 jni → NDK（只有 x86-64 host）→ aarch64 編不了；舊 plugin（2.4.8）套 KGP 又被 AGP 9 擋。解法：pin「無 KGP 且無 jni」的最後版本 `shared_preferences_android 2.4.28` + `path_provider_android 2.2.23`（dNeko 同款模式，見 `~/dennys/AGENTS.md`）。
+- 驗收：`flutter analyze` No issues、`flutter test` 17/17（原 11 + 新 6：遷移、per-player namespace、daily seed、daily 接續、里程碑、daily 排行榜）、`flutter build apk --debug --target-platform android-arm64` ✓ 83.5 MiB。
+
+---
 ## 2026-11-10 Code review 修正（REVIEW.md 16 項全清，review 檔已併入本檔）
 
 Read-only review（`REVIEW.md`，已刪）對 main + working tree 的 16 項發現，全部處理完。

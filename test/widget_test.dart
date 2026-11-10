@@ -18,6 +18,11 @@ void main() {
     return SettingsModel.load(prefs);
   }
 
+  /// 建立一個玩家（per-player 後，app 啟動前必須有玩家）。
+  Future<void> seedPlayer(SharedPreferences prefs, [String name = 'Player']) async {
+    await GameStorage(prefs).addPlayer(name);
+  }
+
   /// 預存一份確定性存檔（app 啟動時接續），讓 board 不依賴隨機。
   Future<void> seedBoard(SharedPreferences prefs, List<({int id, int value, int row, int col})> tiles) async {
     await GameStorage(prefs).saveGame(SavedGame(
@@ -27,7 +32,7 @@ void main() {
       moves: 0,
       undoCount: 0,
       keepPlaying: false,
-    ));
+    ), GameMode.normal);
   }
 
   /// 目前 board 上的方塊（tile id → (value, row, col)）。
@@ -72,6 +77,7 @@ void main() {
   testWidgets('moves add tiles and undo restores the board', (tester) async {
     final settings = await loadSettings();
     final prefs = await SharedPreferences.getInstance();
+    await seedPlayer(prefs);
     await tester.pumpWidget(Game2048App(settings: settings, prefs: prefs, random: Random(42)));
     await tester.pumpAndSettle();
 
@@ -90,6 +96,7 @@ void main() {
   testWidgets('rapid undo taps do not queue', (tester) async {
     final settings = await loadSettings();
     final prefs = await SharedPreferences.getInstance();
+    await seedPlayer(prefs);
     await tester.pumpWidget(Game2048App(settings: settings, prefs: prefs, random: Random(42)));
     await tester.pumpAndSettle();
 
@@ -111,6 +118,7 @@ void main() {
   testWidgets('left move follows the merge rule (one merge per pair)', (tester) async {
     final settings = await loadSettings();
     final prefs = await SharedPreferences.getInstance();
+    await seedPlayer(prefs);
     await seedBoard(prefs, [
       (id: 1, value: 2, row: 0, col: 0),
       (id: 2, value: 2, row: 0, col: 1),
@@ -133,6 +141,7 @@ void main() {
   testWidgets('right move follows the merge rule', (tester) async {
     final settings = await loadSettings();
     final prefs = await SharedPreferences.getInstance();
+    await seedPlayer(prefs);
     await seedBoard(prefs, [
       (id: 1, value: 2, row: 0, col: 0),
       (id: 2, value: 4, row: 0, col: 1),
@@ -155,6 +164,7 @@ void main() {
   testWidgets('down move follows the merge rule', (tester) async {
     final settings = await loadSettings();
     final prefs = await SharedPreferences.getInstance();
+    await seedPlayer(prefs);
     await seedBoard(prefs, [
       (id: 1, value: 2, row: 0, col: 0),
       (id: 2, value: 4, row: 1, col: 0),
@@ -177,6 +187,7 @@ void main() {
   testWidgets('new game dialog picks board size', (tester) async {
     final settings = await loadSettings();
     final prefs = await SharedPreferences.getInstance();
+    await seedPlayer(prefs);
     await tester.pumpWidget(Game2048App(settings: settings, prefs: prefs));
     await tester.pumpAndSettle();
 
@@ -192,6 +203,7 @@ void main() {
   testWidgets('game auto-resumes from saved state', (tester) async {
     final settings = await loadSettings();
     final prefs = await SharedPreferences.getInstance();
+    await seedPlayer(prefs);
 
     await tester.pumpWidget(Game2048App(settings: settings, prefs: prefs, random: Random(42)));
     await tester.pumpAndSettle();
@@ -209,6 +221,7 @@ void main() {
   testWidgets('snapshot save, load and delete', (tester) async {
     final settings = await loadSettings();
     final prefs = await SharedPreferences.getInstance();
+    await seedPlayer(prefs);
     await tester.pumpWidget(Game2048App(settings: settings, prefs: prefs, random: Random(42)));
     await tester.pumpAndSettle();
 
@@ -252,6 +265,7 @@ void main() {
   testWidgets('reaching 2048 shows win overlay and keep playing', (tester) async {
     final settings = await loadSettings();
     final prefs = await SharedPreferences.getInstance();
+    await seedPlayer(prefs);
     // 預存一個快照：兩個 1024 相鄰 → 滑一下就 2048。
     await GameStorage(prefs).saveSnapshots([
       BoardSnapshot(
@@ -301,6 +315,7 @@ void main() {
   testWidgets('redo restores the undone move', (tester) async {
     final settings = await loadSettings();
     final prefs = await SharedPreferences.getInstance();
+    await seedPlayer(prefs);
     await tester.pumpWidget(Game2048App(settings: settings, prefs: prefs, random: Random(42)));
     await tester.pumpAndSettle();
 
@@ -320,6 +335,7 @@ void main() {
   test('loadSnapshots skips corrupted entries', () async {
     SharedPreferences.setMockInitialValues({});
     final prefs = await SharedPreferences.getInstance();
+    await seedPlayer(prefs);
     final good = BoardSnapshot(
       name: 'good',
       boardSize: 4,
@@ -328,9 +344,129 @@ void main() {
       savedAt: DateTime(2026, 11, 10),
     );
     // 一份好 + 一份缺 tiles 的損毀 entry。
-    await prefs.setString(Prefs.snapshots, jsonEncode([good.toJson(), {'name': 'bad', 'boardSize': 4}]));
+    await prefs.setString('${Prefs.snapshots}/Player', jsonEncode([good.toJson(), {'name': 'bad', 'boardSize': 4}]));
     final list = GameStorage(prefs).loadSnapshots();
     expect(list.length, 1);
     expect(list.single.name, 'good');
+  });
+
+  test('old global data migrates to the default player', () async {
+    SharedPreferences.setMockInitialValues({
+      Prefs.savedGame: jsonEncode(SavedGame(
+        boardSize: 4,
+        tiles: [(id: 1, value: 2, row: 0, col: 0)],
+        score: 5,
+        moves: 1,
+        undoCount: 0,
+        keepPlaying: false,
+      ).toJson()),
+      Prefs.stats: jsonEncode(GameStats(gamesPlayed: 3).toJson()),
+    });
+    final prefs = await SharedPreferences.getInstance();
+    final storage = GameStorage(prefs);
+    expect(storage.loadPlayers(), ['Player']);
+    expect(storage.currentPlayer, 'Player');
+    expect(storage.loadSavedGame(GameMode.normal)?.score, 5);
+    expect(storage.loadStats().gamesPlayed, 3);
+    // 舊 key 已搬走
+    expect(prefs.containsKey(Prefs.savedGame), isFalse);
+    expect(prefs.containsKey(Prefs.stats), isFalse);
+  });
+
+  test('player data is namespaced per player', () async {
+    SharedPreferences.setMockInitialValues({});
+    final prefs = await SharedPreferences.getInstance();
+    final storage = GameStorage(prefs);
+    await storage.addPlayer('A');
+    await storage.setBestScore(4, 100);
+    await storage.saveStats(GameStats(gamesPlayed: 7));
+    await storage.addPlayer('B');
+    expect(storage.currentPlayer, 'B');
+    expect(storage.bestScore(4), 0);
+    expect(storage.loadStats().gamesPlayed, 0);
+    expect(storage.bestScoreFor('A', 4), 100);
+    expect(storage.loadStatsFor('A').gamesPlayed, 7);
+  });
+
+  test('daily seed is the local date', () {
+    expect(dailySeedFor(DateTime(2026, 11, 10)), 20261110);
+  });
+
+  testWidgets('daily game resumes the same day', (tester) async {
+    final settings = await loadSettings();
+    final prefs = await SharedPreferences.getInstance();
+    await seedPlayer(prefs);
+    await tester.pumpWidget(Game2048App(settings: settings, prefs: prefs));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Daily'));
+    await tester.pumpAndSettle();
+    final board = readBoard(tester, 4);
+    expect(board.length, 2);
+
+    // 重新開 app → 再按 Daily → 接續同一局（不是開新局）
+    await tester.pumpWidget(Game2048App(settings: settings, prefs: prefs));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Daily'));
+    await tester.pumpAndSettle();
+    expect(readBoard(tester, 4), equals(board));
+  });
+
+  testWidgets('reaching 1024 shows the milestone celebration', (tester) async {
+    final settings = await loadSettings();
+    final prefs = await SharedPreferences.getInstance();
+    await seedPlayer(prefs);
+    await seedBoard(prefs, [
+      (id: 1, value: 512, row: 0, col: 0),
+      (id: 2, value: 512, row: 0, col: 1),
+    ]);
+    await tester.pumpWidget(Game2048App(settings: settings, prefs: prefs));
+    await tester.pumpAndSettle();
+
+    // 512+512 → 1024（不用 swipe helper：它的 pumpAndSettle 會把慶祝 timer 跑完）
+    final center = tester.getCenter(find.byType(AspectRatio));
+    final gesture = await tester.startGesture(center);
+    for (var i = 1; i <= 5; i++) {
+      await gesture.moveTo(
+        center + const Offset(-200, 0) * (i / 5),
+        timeStamp: Duration(milliseconds: 16 * i),
+      );
+      await tester.pump(const Duration(milliseconds: 16));
+    }
+    await gesture.up(timeStamp: const Duration(milliseconds: 96));
+    await tester.pump();
+    expect(find.text('1024!'), findsOneWidget);
+    await tester.pumpAndSettle();
+    expect(find.text('1024!'), findsNothing); // 自動消失
+  });
+
+  testWidgets('daily leaderboard lists players by today score', (tester) async {
+    final settings = await loadSettings();
+    final prefs = await SharedPreferences.getInstance();
+    await seedPlayer(prefs, 'A');
+    final storage = GameStorage(prefs);
+    final today = dailySeedFor(DateTime.now());
+    await storage.saveStats(GameStats(dailyBest: 500, lastDailyDate: today)); // A（目前玩家）
+    await storage.addPlayer('B'); // current → B
+    await storage.saveStats(GameStats(dailyBest: 900, lastDailyDate: today)); // B
+    await storage.setCurrentPlayer('A');
+
+    await tester.pumpWidget(Game2048App(settings: settings, prefs: prefs));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byIcon(Icons.emoji_events_outlined));
+    await tester.pumpAndSettle();
+    expect(find.text('Daily leaderboard'), findsOneWidget);
+    // B（900）排第一、A（500）排第二
+    final items = tester.widgetList<ListTile>(find.descendant(of: find.byType(AlertDialog), matching: find.byType(ListTile))).toList();
+    expect(items.length, 2);
+    final firstTexts = tester.widgetList<Text>(find.descendant(of: find.byWidget(items.first), matching: find.byType(Text))).map((t) => t.data).toList();
+    expect(firstTexts, contains('B'));
+    expect(firstTexts, contains('900'));
+    final secondTexts = tester.widgetList<Text>(find.descendant(of: find.byWidget(items[1]), matching: find.byType(Text))).map((t) => t.data).toList();
+    expect(secondTexts, contains('A'));
+    expect(secondTexts, contains('500'));
+    tester.state<NavigatorState>(find.byType(Navigator)).pop();
+    await tester.pumpAndSettle();
   });
 }

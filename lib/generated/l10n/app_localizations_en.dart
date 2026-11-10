@@ -121,4 +121,46 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get totalMerges => 'Total merges';
+
+  @override
+  String get players => 'Players';
+
+  @override
+  String get whoIsPlaying => 'Who\'s playing?';
+
+  @override
+  String get yourName => 'Your name';
+
+  @override
+  String get addPlayer => 'New player name';
+
+  @override
+  String get add => 'Add';
+
+  @override
+  String get switchPlayer => 'Switch player';
+
+  @override
+  String get daily => 'Daily';
+
+  @override
+  String get dailyLeaderboard => 'Daily leaderboard';
+
+  @override
+  String get leaderboard => 'Leaderboard';
+
+  @override
+  String get notPlayed => '—';
+
+  @override
+  String get noScores => 'No scores yet';
+
+  @override
+  String get share => 'Share';
+
+  @override
+  String get shareText => 'Share text';
+
+  @override
+  String get shareScreenshot => 'Share screenshot';
 }

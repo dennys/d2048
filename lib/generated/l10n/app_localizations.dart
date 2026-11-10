@@ -315,6 +315,90 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Total merges'**
   String get totalMerges;
+
+  /// No description provided for @players.
+  ///
+  /// In en, this message translates to:
+  /// **'Players'**
+  String get players;
+
+  /// No description provided for @whoIsPlaying.
+  ///
+  /// In en, this message translates to:
+  /// **'Who\'s playing?'**
+  String get whoIsPlaying;
+
+  /// No description provided for @yourName.
+  ///
+  /// In en, this message translates to:
+  /// **'Your name'**
+  String get yourName;
+
+  /// No description provided for @addPlayer.
+  ///
+  /// In en, this message translates to:
+  /// **'New player name'**
+  String get addPlayer;
+
+  /// No description provided for @add.
+  ///
+  /// In en, this message translates to:
+  /// **'Add'**
+  String get add;
+
+  /// No description provided for @switchPlayer.
+  ///
+  /// In en, this message translates to:
+  /// **'Switch player'**
+  String get switchPlayer;
+
+  /// No description provided for @daily.
+  ///
+  /// In en, this message translates to:
+  /// **'Daily'**
+  String get daily;
+
+  /// No description provided for @dailyLeaderboard.
+  ///
+  /// In en, this message translates to:
+  /// **'Daily leaderboard'**
+  String get dailyLeaderboard;
+
+  /// No description provided for @leaderboard.
+  ///
+  /// In en, this message translates to:
+  /// **'Leaderboard'**
+  String get leaderboard;
+
+  /// No description provided for @notPlayed.
+  ///
+  /// In en, this message translates to:
+  /// **'—'**
+  String get notPlayed;
+
+  /// No description provided for @noScores.
+  ///
+  /// In en, this message translates to:
+  /// **'No scores yet'**
+  String get noScores;
+
+  /// No description provided for @share.
+  ///
+  /// In en, this message translates to:
+  /// **'Share'**
+  String get share;
+
+  /// No description provided for @shareText.
+  ///
+  /// In en, this message translates to:
+  /// **'Share text'**
+  String get shareText;
+
+  /// No description provided for @shareScreenshot.
+  ///
+  /// In en, this message translates to:
+  /// **'Share screenshot'**
+  String get shareScreenshot;
 }
 
 class _AppLocalizationsDelegate

@@ -7,11 +7,16 @@ class Prefs {
   static const boardSize = 'board_size';
   static const haptics = 'haptics';
 
-  // 遊戲資料（GameStorage 用）
+  // 遊戲資料（GameStorage 用）；遊戲資料 key 一律 `<base>/<player>` namespace
   static const savedGame = 'saved_game';
+  static const savedGameDaily = 'saved_game_daily';
   static const snapshots = 'snapshots';
   static const bestScores = 'best_scores';
   static const stats = 'stats';
+
+  // 玩家（per-player profiles）
+  static const players = 'players';
+  static const currentPlayer = 'current_player';
 }
 
 /// 預設值。同一個語意只准出現一次。
@@ -30,4 +35,10 @@ class PrefsDefaults {
 
   /// 快照上限：滿了擋下新存檔。
   static const snapshotLimit = 50;
+
+  /// 舊版全域資料遷移時搬進的預設玩家。
+  static const defaultPlayer = 'Player';
+
+  /// 本地排行榜每格數取前 N 名。
+  static const leaderboardTopN = 10;
 }

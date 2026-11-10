@@ -3,16 +3,13 @@
 慣例：一個待辦一段，寫清「檔案:行」與「為什麼现在是這樣」；**做完就搬到 `CHANGELOG.md`**（`git log` 才是權威）。
 
 ---
-## 2026-11-10 待辦：新功能 backlog（re-review 後討論，全部未開始）
+## 2026-11-10 待辦：新功能 backlog（re-review 後討論）
 
-> 依 effort/回報排序，★ = 建議先做（低 effort 高回報）。
+> 依 effort/回報排序，★ = 建議先做。場景：主要我和家人幾個人用，可能同一支手機多人共用。
+> 2026-11-10 已完成並搬到 CHANGELOG：Per-player Profiles、家庭 Daily Leaderboard、里程碑慶祝、分享成績、本地排行榜。
 
-- **★ 每日挑戰**——seed = 日期 hash，全世界同一天同一個 board，高回訪率。落點：`_addRandomTile` 的 `random` 改 seeded、`_initializeGame` 接受 seed。
-- **★ 里程碑慶祝**——1024/2048/4096 時 confetti 或特殊動畫。落點：`_afterMove` 偵測 maxTile 跨過里程碑。
 - **★ 鍵盤控制**——方向鍵（desktop/web）。落點：`GameScreen` 加 `Focus` + `onKey` 映射到 `_swipe` 的 Direction。
 - **音效**——合併/過關音效（震動已有）。需 asset + 播放（`SystemSound` 或 `audioplayers`）。
-- **分享成績**——share 文字/截圖（`share_plus`）。
-- **本地排行榜**——每裝置、每格數 top N，純本地（`GameStorage`）。
 - **遊戲模式**——計時模式（60 秒衝分）、解謎模式（固定 board、最少步數）。
 - **成就/徽章**——「到達 4096」「合併 100 次」「連玩 7 天」。
 - **遊戲歷史 / 連玩天數**——過去幾局 score/moves 列表；consecutive days。
