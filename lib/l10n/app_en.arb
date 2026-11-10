@@ -1,0 +1,53 @@
+{
+  "@@locale": "en",
+  "score": "Score",
+  "undo": "Undo",
+  "undoCount": "Undo ×{count}",
+  "@undoCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "newGame": "New Game",
+  "settings": "Settings",
+  "gameOver": "Game Over!",
+  "playAgain": "Play Again",
+  "swipeHint": "Swipe to move tiles. Merge same numbers to get 2048!",
+  "selectBoardSize": "Board size",
+  "language": "Language",
+  "followSystem": "Follow system",
+  "english": "English",
+  "traditionalChinese": "Traditional Chinese",
+  "simplifiedChinese": "Simplified Chinese",
+  "theme": "Theme",
+  "light": "Light",
+  "dark": "Dark",
+  "system": "System",
+  "best": "Best",
+  "moves": "Moves",
+  "redo": "Redo",
+  "youWin": "You win!",
+  "keepPlaying": "Keep playing",
+  "saveSnapshot": "Save snapshot",
+  "loadSnapshot": "Snapshots",
+  "snapshotName": "Name",
+  "noSnapshots": "No snapshots yet",
+  "snapshotLimit": "Snapshot limit ({limit}) reached",
+  "@snapshotLimit": {
+    "placeholders": {
+      "limit": {
+        "type": "int"
+      }
+    }
+  },
+  "save": "Save",
+  "cancel": "Cancel",
+  "haptics": "Haptics",
+  "stats": "Stats",
+  "gamesPlayed": "Games played",
+  "wins": "Wins",
+  "maxTile": "Best tile",
+  "totalMerges": "Total merges"
+}

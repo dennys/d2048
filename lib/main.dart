@@ -1,152 +1,409 @@
-import 'package:flutter/material.dart';
 import 'dart:math';
 
-void main() {
-  runApp(const Game2048App());
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+import 'game_storage.dart';
+import 'generated/l10n/app_localizations.dart';
+import 'settings_keys.dart';
+import 'settings_model.dart';
+import 'tile_style.dart';
+import 'widgets/settings_screen.dart';
+import 'widgets/snapshots.dart';
+
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  final prefs = await SharedPreferences.getInstance();
+  final settings = await SettingsModel.load(); // 載入完成才 runApp：首幀就是正確的設定值
+  runApp(Game2048App(settings: settings, prefs: prefs));
 }
 
 class Game2048App extends StatelessWidget {
-  const Game2048App({super.key});
+  final SettingsModel settings;
+  final SharedPreferences prefs;
+  final Random? random; // 測試注入用；null = 真隨機
+
+  const Game2048App({super.key, required this.settings, required this.prefs, this.random});
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: '2048 Game',
-      theme: ThemeData(
-        primarySwatch: Colors.blue,
-        brightness: Brightness.light,
-      ),
-      home: const GameScreen(),
+    // ListenableBuilder：語言/主題改完，MaterialApp 立刻重建（locale/themeMode 生效）。
+    return ListenableBuilder(
+      listenable: settings,
+      builder: (context, _) {
+        return MaterialApp(
+          title: '2048',
+          theme: ThemeData(
+            colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue, brightness: Brightness.light),
+          ),
+          darkTheme: ThemeData(
+            colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue, brightness: Brightness.dark),
+          ),
+          themeMode: settings.getThemeMode(),
+          locale: settings.getLocale(),
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: GameScreen(settings: settings, prefs: prefs, random: random),
+        );
+      },
     );
   }
 }
 
 class GameScreen extends StatefulWidget {
-  const GameScreen({super.key});
+  final SettingsModel settings;
+  final SharedPreferences prefs;
+  final Random? random; // 測試注入用；null = 真隨機
+
+  const GameScreen({super.key, required this.settings, required this.prefs, this.random});
 
   @override
   State<GameScreen> createState() => _GameScreenState();
 }
 
 class _GameScreenState extends State<GameScreen> {
-  // Initialize the board directly instead of using 'late'
-  List<List<int>> board = List.generate(4, (_) => List.filled(4, 0));
-  int score = 0;
-  bool gameOver = false;
-  final Random random = Random();
+  static const _animDuration = Duration(milliseconds: 150);
+
+  late final GameStorage storage;
+
+  int size = 4;
+  final List<Tile> tiles = [];
   final List<_Snapshot> history = [];
-
-  List<List<int>> _cloneBoard() =>
-      List.generate(4, (i) => List.of(board[i]));
-
-  void _undo() {
-    if (history.isEmpty) return;
-    final snapshot = history.removeLast();
-    board = snapshot.board;
-    score = snapshot.score;
-    gameOver = false;
-  }
+  final List<_Snapshot> redoStack = [];
+  int score = 0;
+  int moves = 0;
+  int undoCount = 0;
+  int best = 0;
+  bool won = false;
+  bool keepPlaying = false;
+  bool gameOver = false;
+  GameStats stats = GameStats();
+  int _gain = 0; // 上一手得到的分數（+N 浮字）
+  int _gainKey = 0; // 浮字動畫重開的 key
+  late final Random random = widget.random ?? Random();
+  int _nextId = 1;
 
   @override
   void initState() {
     super.initState();
-    _initializeGame();
+    storage = GameStorage(widget.prefs);
+    stats = storage.loadStats();
+    final saved = storage.loadSavedGame();
+    if (saved != null) {
+      _restoreSaved(saved); // 接續上次：靜止渲染，不播動畫
+    } else {
+      size = widget.settings.boardSize;
+      _initializeGame();
+    }
   }
 
   void _initializeGame() {
-    // Reset the board with zeros
-    board = List.generate(4, (_) => List.filled(4, 0));
-    score = 0;
-    gameOver = false;
+    tiles.clear();
     history.clear();
+    redoStack.clear();
+    score = 0;
+    moves = 0;
+    undoCount = 0;
+    best = storage.bestScore(size);
+    won = false;
+    keepPlaying = false;
+    gameOver = false;
+    _gain = 0;
+    _addRandomTile();
+    _addRandomTile();
+    stats.gamesPlayed++;
+    _persist();
+    _resetTileFlagsAfterFrame(); // 初始方塊也要走 spawn 動畫（isNew 首幀 0.01 → 1.0）
+  }
 
-    // Add two random tiles to start
-    _addRandomTile();
-    _addRandomTile();
+  /// 從自動存檔接續：同一批 id、沒有 isNew/justMerged → 不播動畫。
+  void _restoreSaved(SavedGame saved) {
+    size = saved.boardSize;
+    tiles
+      ..clear()
+      ..addAll([for (final t in saved.tiles) Tile(id: t.id, value: t.value, row: t.row, col: t.col)]);
+    score = saved.score;
+    moves = saved.moves;
+    undoCount = saved.undoCount;
+    best = storage.bestScore(size);
+    won = tiles.any((t) => t.value >= 2048);
+    keepPlaying = saved.keepPlaying;
+    gameOver = !_canMove();
   }
 
   void _addRandomTile() {
-    List<List<int>> emptyPositions = [];
-
-    // Find all empty positions
-    for (int i = 0; i < 4; i++) {
-      for (int j = 0; j < 4; j++) {
-        if (board[i][j] == 0) {
-          emptyPositions.add([i, j]);
-        }
-      }
-    }
-
-    if (emptyPositions.isEmpty) return;
-
-    // Select a random empty position
-    final position = emptyPositions[random.nextInt(emptyPositions.length)];
-
-    // Set it to 2 (90% chance) or 4 (10% chance)
-    board[position[0]][position[1]] = random.nextDouble() < 0.9 ? 2 : 4;
+    final occupied = <int>{for (final t in tiles) if (!t.removed) t.row * size + t.col};
+    final empty = <int>[for (var i = 0; i < size * size; i++) if (!occupied.contains(i)) i];
+    if (empty.isEmpty) return;
+    final p = empty[random.nextInt(empty.length)];
+    tiles.add(Tile(
+      id: _nextId++,
+      value: random.nextDouble() < 0.9 ? 2 : 4,
+      row: p ~/ size,
+      col: p % size,
+      isNew: true,
+    ));
   }
 
   bool _canMove() {
-    // Check if there are any empty cells
-    for (int i = 0; i < 4; i++) {
-      for (int j = 0; j < 4; j++) {
-        if (board[i][j] == 0) return true;
+    final b = List.generate(size, (_) => List.filled(size, 0));
+    for (final t in tiles) {
+      if (!t.removed) b[t.row][t.col] = t.value;
+    }
+    for (var i = 0; i < size; i++) {
+      for (var j = 0; j < size; j++) {
+        if (b[i][j] == 0) return true;
+        if (j + 1 < size && b[i][j] == b[i][j + 1]) return true;
+        if (i + 1 < size && b[i][j] == b[i + 1][j]) return true;
       }
     }
-
-    // Check if there are any adjacent cells with the same value
-    for (int i = 0; i < 4; i++) {
-      for (int j = 0; j < 3; j++) {
-        if (board[i][j] == board[i][j + 1]) return true;
-      }
-    }
-
-    for (int j = 0; j < 4; j++) {
-      for (int i = 0; i < 3; i++) {
-        if (board[i][j] == board[i + 1][j]) return true;
-      }
-    }
-
     return false;
   }
 
   bool _move(Direction direction) {
-    history.add(_Snapshot(_cloneBoard(), score));
-    bool moved = false;
+    tiles.removeWhere((t) => t.removed); // 清掉上一回合的合併殘骸
+    final before = <int, (int, int, int)>{
+      for (final t in tiles) t.id: (t.row, t.col, t.value),
+    };
+    history.add(_takeSnapshot());
 
-    switch (direction) {
-      case Direction.up:
-        moved = _moveUp();
-        break;
-      case Direction.down:
-        moved = _moveDown();
-        break;
-      case Direction.left:
-        moved = _moveLeft();
-        break;
-      case Direction.right:
-        moved = _moveRight();
-        break;
+    final scoreBefore = score;
+    var merges = 0;
+    final at = <int, Tile>{for (final t in tiles) t.row * size + t.col: t};
+    for (var i = 0; i < size; i++) {
+      final line = <Tile>[];
+      for (var j = 0; j < size; j++) {
+        final r = (direction == Direction.up || direction == Direction.down) ? j : i;
+        final c = (direction == Direction.up || direction == Direction.down) ? i : j;
+        final t = at[r * size + c];
+        if (t != null) line.add(t);
+      }
+      merges += _applyLine(line, i, direction);
     }
 
+    var moved = false;
+    for (final t in tiles) {
+      if (t.removed) continue;
+      final b = before[t.id]!;
+      if (b.$1 != t.row || b.$2 != t.col || b.$3 != t.value) moved = true;
+    }
     if (!moved) {
       history.removeLast();
       return false;
     }
 
+    redoStack.clear(); // 新移動作廢 redo stack
+    moves++;
     _addRandomTile();
-
-    if (!_canMove()) {
-      gameOver = true;
-    }
-
+    if (!_canMove()) gameOver = true;
+    _afterMove(merges, score - scoreBefore);
+    _resetTileFlagsAfterFrame();
     return true;
   }
 
-  /// One handler for both axes: the pan recognizer already picked a direction, so pick
-  /// the dominant axis here and let a drag with no speed at all do nothing.
+  /// 移動後記帳：震動／統計／過關偵測／最高分／自動存檔。
+  void _afterMove(int merges, int gain) {
+    if (merges > 0) {
+      stats.totalMerges += merges;
+      if (widget.settings.haptics) HapticFeedback.mediumImpact();
+    }
+    if (gain > 0) {
+      _gain = gain;
+      _gainKey++;
+    }
+    var maxTile = 0;
+    for (final t in tiles) {
+      if (!t.removed && t.value > maxTile) maxTile = t.value;
+    }
+    if (maxTile > stats.maxTile) stats.maxTile = maxTile;
+    if (!won && maxTile >= 2048) {
+      won = true;
+      keepPlaying = false; // 新過關 → 顯示 overlay（載入快照時 keepPlaying=true 不重播）
+      stats.wins++;
+    }
+    if (score > best) {
+      best = score;
+      storage.setBestScore(size, best);
+    }
+    _persist();
+  }
+
+  /// 一條線（[line] 已依移動方向排好序）：滑動 + 每對只合併一次（2,2,4 走左 = 4,4，不是 8,0）。
+  /// 回傳這條線的合併次數。
+  int _applyLine(List<Tile> line, int index, Direction direction) {
+    var slot = 0;
+    var i = 0;
+    var merges = 0;
+    while (i < line.length) {
+      final t = line[i];
+      if (i + 1 < line.length && line[i + 1].value == t.value) {
+        final other = line[i + 1];
+        final (r, c) = _target(index, slot, direction);
+        t.row = r;
+        t.col = c;
+        t.value *= 2;
+        score += t.value;
+        t.justMerged = true;
+        other.row = r;
+        other.col = c;
+        other.removed = true; // 滑到同一格、被合併方塊蓋住，下次狀態變更時清掉
+        i += 2;
+        merges++;
+      } else {
+        final (r, c) = _target(index, slot, direction);
+        t.row = r;
+        t.col = c;
+        i += 1;
+      }
+      slot++;
+    }
+    return merges;
+  }
+
+  (int, int) _target(int index, int slot, Direction direction) {
+    switch (direction) {
+      case Direction.left:
+        return (index, slot);
+      case Direction.right:
+        return (index, size - 1 - slot);
+      case Direction.up:
+        return (slot, index);
+      case Direction.down:
+        return (size - 1 - slot, index);
+    }
+  }
+
+  _Snapshot _takeSnapshot() => _Snapshot(
+        [for (final t in tiles) if (!t.removed) (id: t.id, value: t.value, row: t.row, col: t.col)],
+        score,
+      );
+
+  void _restoreSnapshot(_Snapshot snapshot) {
+    tiles
+      ..clear()
+      ..addAll([for (final t in snapshot.tiles) Tile(id: t.id, value: t.value, row: t.row, col: t.col)]);
+    score = snapshot.score;
+    gameOver = false;
+  }
+
+  /// 復原：同步還原狀態，不排動畫 queue —— 連按 N 下就是彈 N 個 snapshot，
+  /// 動畫只是追著最新狀態跑（AnimatedPositioned 自動 re-target），不會堆積。
+  void _undo() {
+    if (history.isEmpty) return;
+    final snapshot = history.removeLast();
+    redoStack.add(_takeSnapshot());
+    _restoreSnapshot(snapshot);
+    undoCount++;
+    _persist();
+  }
+
+  void _redo() {
+    if (redoStack.isEmpty) return;
+    final snapshot = redoStack.removeLast();
+    history.add(_takeSnapshot());
+    _restoreSnapshot(snapshot);
+    _persist();
+  }
+
+  /// 自動存檔 + 統計（fire-and-forget；每次狀態變更後呼叫）。
+  void _persist() {
+    storage.saveGame(SavedGame(
+      boardSize: size,
+      tiles: [for (final t in tiles) if (!t.removed) (id: t.id, value: t.value, row: t.row, col: t.col)],
+      score: score,
+      moves: moves,
+      undoCount: undoCount,
+      keepPlaying: keepPlaying,
+    ));
+    storage.saveStats(stats);
+  }
+
+  /// 存快照：命名對話框 → 加入 list（上限 [PrefsDefaults.snapshotLimit]）。
+  Future<void> _saveSnapshot() async {
+    final l = AppLocalizations.of(context)!;
+    final snapshots = storage.loadSnapshots();
+    if (snapshots.length >= PrefsDefaults.snapshotLimit) {
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(content: Text(l.snapshotLimit(PrefsDefaults.snapshotLimit))));
+      return;
+    }
+    final now = DateTime.now();
+    final defaultName =
+        '${now.month}-${now.day} ${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
+    final name = await showSaveSnapshotDialog(context, defaultName);
+    if (name == null || !mounted) return;
+    snapshots.add(BoardSnapshot(
+      name: name,
+      boardSize: size,
+      tiles: [for (final t in tiles) if (!t.removed) (id: t.id, value: t.value, row: t.row, col: t.col)],
+      score: score,
+      savedAt: now,
+    ));
+    await storage.saveSnapshots(snapshots);
+  }
+
+  /// 快照 list：tap 載入、🗑 刪除。
+  Future<void> _showSnapshots() async {
+    final snapshots = storage.loadSnapshots();
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => SnapshotListDialog(
+        snapshots: snapshots,
+        onLoad: (s) {
+          Navigator.pop(dialogContext);
+          _loadSnapshot(s);
+        },
+        onDelete: (s) {
+          final list = storage.loadSnapshots()
+            ..removeWhere((x) => x.name == s.name && x.savedAt == s.savedAt);
+          storage.saveSnapshots(list);
+        },
+      ),
+    );
+  }
+
+  /// 載入快照：board 原樣恢復、靜止渲染；history/redo 清空，不重播過關 overlay。
+  void _loadSnapshot(BoardSnapshot s) {
+    setState(() {
+      size = s.boardSize;
+      tiles
+        ..clear()
+        ..addAll([for (final t in s.tiles) Tile(id: t.id, value: t.value, row: t.row, col: t.col)]);
+      score = s.score;
+      moves = 0;
+      undoCount = 0;
+      history.clear();
+      redoStack.clear();
+      won = tiles.any((t) => t.value >= 2048);
+      keepPlaying = true;
+      gameOver = !_canMove();
+      best = storage.bestScore(size);
+      _gain = 0;
+      _persist();
+    });
+  }
+
+  /// 新方塊 spawn（scale 0→1）與合併 pop（1→1.15→1）：首幀畫完後再切 flag，
+  /// AnimatedScale 才有「從舊值到新值」可動畫。
+  void _resetTileFlagsAfterFrame() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      setState(() {
+        for (final t in tiles) {
+          t.isNew = false;
+          t.justMerged = false;
+        }
+      });
+    });
+  }
+
+  /// One handler for both axes: the pan recognizer fires BOTH drag-end
+  /// callbacks when a gesture has speed on both axes, so pick the dominant
+  /// axis here and let a drag with no speed at all do nothing.
   void _swipe(Velocity velocity) {
-    if (gameOver) return;
+    if (gameOver || (won && !keepPlaying)) return;
     final dx = velocity.pixelsPerSecond.dx;
     final dy = velocity.pixelsPerSecond.dy;
     if (dx == 0 && dy == 0) return;
@@ -155,126 +412,222 @@ class _GameScreenState extends State<GameScreen> {
         : (dy < 0 ? Direction.up : Direction.down)));
   }
 
-  // 四方向只把「取哪份 4 格、有没有反面」不同；把 merge rule 在只一处（原本把四份雨段抄略差一份）
-  bool _moveLeft() => _slideRows(false);
-  bool _moveRight() => _slideRows(true);
-  bool _moveUp() => _slideColumns(false);
-  bool _moveDown() => _slideColumns(true);
-
-  bool _slideRows(bool reverse) {
-    var moved = false;
-    for (var i = 0; i < 4; i++) {
-      final merged = _mergeLine(board[i], reverse: reverse);
-      for (var j = 0; j < 4; j++) {
-        if (board[i][j] != merged[j]) moved = true;
-        board[i][j] = merged[j];
-      }
+  Future<void> _newGame() async {
+    final l = AppLocalizations.of(context)!;
+    final chosen = await showDialog<int>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(l.selectBoardSize),
+        content: RadioGroup<int>(
+          groupValue: size,
+          onChanged: (v) => Navigator.pop(dialogContext, v),
+          child: SizedBox(
+            width: 200,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                for (final s in PrefsDefaults.boardSizeOptions)
+                  RadioListTile<int>(
+                    value: s,
+                    dense: true,
+                    title: Text('$s×$s'),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+    if (chosen == null) return;
+    if (!mounted) return;
+    if (chosen != size) {
+      await widget.settings.setBoardSize(chosen);
+      size = chosen;
     }
-    return moved;
+    if (!mounted) return;
+    setState(_initializeGame);
   }
 
-  bool _slideColumns(bool reverse) {
-    var moved = false;
-    for (var j = 0; j < 4; j++) {
-      final merged = _mergeLine([for (var i = 0; i < 4; i++) board[i][j]], reverse: reverse);
-      for (var i = 0; i < 4; i++) {
-        if (board[i][j] != merged[i]) moved = true;
-        board[i][j] = merged[i];
-      }
-    }
-    return moved;
+  Widget _tile(Tile t, double cell, double gap) {
+    return AnimatedPositioned(
+      // key 綁 tile id：合併時方塊在 Stack 的 children 裡換位置（live→removed 區），
+      // 沒有 key 會按 index 配對到錯的 element，滑動動畫從錯的位置起跳。
+      key: ValueKey(t.id),
+      duration: _animDuration,
+      curve: Curves.easeOut,
+      left: gap + t.col * (cell + gap),
+      top: gap + t.row * (cell + gap),
+      width: cell,
+      height: cell,
+      child: AnimatedScale(
+        duration: _animDuration,
+        curve: Curves.easeOut,
+        scale: t.isNew ? 0.01 : (t.justMerged ? 1.15 : 1.0),
+        child: Container(
+          decoration: BoxDecoration(
+            color: tileColor(t.value),
+            borderRadius: BorderRadius.circular(8.0),
+          ),
+          child: Center(
+            child: Text(
+              t.value.toString(),
+              style: TextStyle(
+                color: tileTextColor(t.value),
+                fontSize: cell * (t.value >= 1024 ? 0.22 : t.value >= 128 ? 0.28 : 0.36),
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 
-  /// Slides one line of 4 cells towards the low index; [reverse] slides it the other way.
-  List<int> _mergeLine(List<int> line, {bool reverse = false}) {
-    final src = reverse ? line.reversed.toList() : line;
-    final nonZeros = src.where((value) => value != 0).toList();
-    // 單 merge per pair per move（2,2,4 走左 = 4,4，不是 8,0）
-    for (var i = 0; i < nonZeros.length - 1; i++) {
-      if (nonZeros[i] == nonZeros[i + 1]) {
-        nonZeros[i] *= 2;
-        score += nonZeros[i];
-        nonZeros[i + 1] = 0;
-      }
-    }
-    final merged = nonZeros.where((value) => value != 0).toList();
-    while (merged.length < 4) {
-      merged.add(0);
-    }
-    return reverse ? merged.reversed.toList() : merged;
+  Widget _buildBoard() {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final side = constraints.biggest.shortestSide;
+        final gap = 8.0;
+        final cell = (side - gap * (size + 1)) / size;
+        return Container(
+          margin: const EdgeInsets.all(8.0),
+          padding: const EdgeInsets.all(8.0),
+          decoration: BoxDecoration(
+            color: Colors.grey[400],
+            borderRadius: BorderRadius.circular(8.0),
+          ),
+          child: Stack(
+            children: [
+              // 背景格
+              for (var i = 0; i < size * size; i++)
+                Positioned(
+                  left: gap + (i % size) * (cell + gap),
+                  top: gap + (i ~/ size) * (cell + gap),
+                  width: cell,
+                  height: cell,
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: Colors.grey[300],
+                      borderRadius: BorderRadius.circular(8.0),
+                    ),
+                  ),
+                ),
+              // 方塊：先畫已消失的（被合併方塊蓋住），再畫活方塊
+              for (final t in tiles.where((t) => t.removed)) _tile(t, cell, gap),
+              for (final t in tiles.where((t) => !t.removed)) _tile(t, cell, gap),
+            ],
+          ),
+        );
+      },
+    );
   }
 
-  Color _getTileColor(int value) {
-    switch (value) {
-      case 0:
-        return Colors.grey[300]!;
-      case 2:
-        return Colors.grey[50]!;
-      case 4:
-        return Colors.amber[50]!;
-      case 8:
-        return Colors.orange[200]!;
-      case 16:
-        return Colors.orange[300]!;
-      case 32:
-        return Colors.orange[400]!;
-      case 64:
-        return Colors.orange[700]!;
-      case 128:
-        return Colors.amber[400]!;
-      case 256:
-        return Colors.amber[500]!;
-      case 512:
-        return Colors.amber[600]!;
-      case 1024:
-        return Colors.amber[700]!;
-      case 2048:
-        return Colors.amber[800]!;
-      default:
-        return Colors.red[400]!;
-    }
-  }
-
-  Color _getTextColor(int value) {
-    return value <= 4 ? Colors.grey[800]! : Colors.white;
+  /// +N 浮字：每次有得分的移動重開一次（key 變 → TweenAnimationBuilder 重跑）。
+  Widget _gainPopup() {
+    return TweenAnimationBuilder<double>(
+      key: ValueKey(_gainKey),
+      tween: Tween(begin: 0.0, end: 1.0),
+      duration: const Duration(milliseconds: 600),
+      builder: (context, t, child) => Transform.translate(
+        offset: Offset(0, -24 * t),
+        child: Opacity(opacity: (1 - t).clamp(0.0, 1.0), child: child),
+      ),
+      child: Text(
+        '+$_gain',
+        style: TextStyle(
+          color: Colors.green[700],
+          fontSize: 16,
+          fontWeight: FontWeight.bold,
+        ),
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context)!;
     return Scaffold(
-      appBar: AppBar(title: const Text('2048 Game'), centerTitle: true),
+      appBar: AppBar(
+        title: const Text('2048'),
+        centerTitle: true,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.settings_outlined),
+            tooltip: l.settings,
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => SettingsScreen(settings: widget.settings, stats: storage.loadStats()),
+              ),
+            ),
+          ),
+        ],
+      ),
       body: SafeArea(
         child: Column(
           children: [
-            // Score and Reset button
+            // Score / best / moves / undo count + snapshot buttons
             Padding(
               padding: const EdgeInsets.all(16.0),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              child: Column(
                 children: [
-                  Text(
-                    'Score: $score',
-                    style: const TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
                   Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Stack(
+                        clipBehavior: Clip.none,
+                        children: [
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                '${l.score}: $score',
+                                style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+                              ),
+                              Text('${l.best}: $best', style: TextStyle(color: Colors.grey[700])),
+                              Text(
+                                '${l.moves}: $moves  ${l.undoCount(undoCount)}',
+                                style: TextStyle(color: Colors.grey[700]),
+                              ),
+                            ],
+                          ),
+                          if (_gain > 0)
+                            Positioned(right: 0, top: 0, child: _gainPopup()),
+                        ],
+                      ),
+                      Column(
+                        children: [
+                          IconButton(
+                            icon: const Icon(Icons.bookmark_add_outlined),
+                            tooltip: l.saveSnapshot,
+                            onPressed: _saveSnapshot,
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.folder_outlined),
+                            tooltip: l.loadSnapshot,
+                            onPressed: _showSnapshots,
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       ElevatedButton(
-                        onPressed: history.isEmpty
-                            ? null
-                            : () => setState(_undo),
-                        child: const Text('Undo'),
+                        onPressed: history.isEmpty ? null : () => setState(_undo),
+                        child: Text(l.undo),
                       ),
                       const SizedBox(width: 8),
                       ElevatedButton(
-                        onPressed: () {
-                          setState(() {
-                            _initializeGame();
-                          });
-                        },
-                        child: const Text('New Game'),
+                        onPressed: redoStack.isEmpty ? null : () => setState(_redo),
+                        child: Text(l.redo),
+                      ),
+                      const SizedBox(width: 8),
+                      ElevatedButton(
+                        onPressed: () => _newGame(),
+                        child: Text(l.newGame),
                       ),
                     ],
                   ),
@@ -288,68 +641,25 @@ class _GameScreenState extends State<GameScreen> {
                 child: AspectRatio(
                   aspectRatio: 1.0,
                   child: GestureDetector(
-                    // 斜拖 only counts as one move: the pan recognizer fires BOTH drag-end
-                    // callbacks when a gesture has speed on both axes, so the old code ran _move
-                    // twice for one diagonal swipe. Pick the dominant axis instead.
                     onVerticalDragEnd: (details) => _swipe(details.velocity),
                     onHorizontalDragEnd: (details) => _swipe(details.velocity),
-                    child: Container(
-                      margin: const EdgeInsets.all(8.0),
-                      padding: const EdgeInsets.all(8.0),
-                      decoration: BoxDecoration(
-                        color: Colors.grey[400],
-                        borderRadius: BorderRadius.circular(8.0),
-                      ),
-                      child: GridView.builder(
-                        physics: const NeverScrollableScrollPhysics(),
-                        gridDelegate:
-                            const SliverGridDelegateWithFixedCrossAxisCount(
-                              crossAxisCount: 4,
-                              childAspectRatio: 1.0,
-                              crossAxisSpacing: 8.0,
-                              mainAxisSpacing: 8.0,
-                            ),
-                        itemCount: 16,
-                        itemBuilder: (context, index) {
-                          final row = index ~/ 4;
-                          final col = index % 4;
-                          final value = board[row][col];
-
-                          return Container(
-                            decoration: BoxDecoration(
-                              color: _getTileColor(value),
-                              borderRadius: BorderRadius.circular(8.0),
-                            ),
-                            child: Center(
-                              child: Text(
-                                value > 0 ? value.toString() : '',
-                                style: TextStyle(
-                                  color: _getTextColor(value),
-                                  fontSize: value > 512 ? 20 : 24,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            ),
-                          );
-                        },
-                      ),
-                    ),
+                    child: _buildBoard(),
                   ),
                 ),
               ),
             ),
 
-            // Game over overlay
-            if (gameOver)
+            // Win overlay（過關但選擇繼續前）
+            if (won && !keepPlaying)
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.all(16.0),
                 color: Colors.black54,
                 child: Column(
                   children: [
-                    const Text(
-                      'Game Over!',
-                      style: TextStyle(
+                    Text(
+                      l.youWin,
+                      style: const TextStyle(
                         color: Colors.white,
                         fontSize: 28,
                         fontWeight: FontWeight.bold,
@@ -357,12 +667,40 @@ class _GameScreenState extends State<GameScreen> {
                     ),
                     const SizedBox(height: 16),
                     ElevatedButton(
-                      onPressed: () {
-                        setState(() {
-                          _initializeGame();
-                        });
-                      },
-                      child: const Text('Play Again'),
+                      onPressed: () => setState(() {
+                        keepPlaying = true;
+                        _persist();
+                      }),
+                      child: Text(l.keepPlaying),
+                    ),
+                    const SizedBox(height: 8),
+                    ElevatedButton(
+                      onPressed: _newGame,
+                      child: Text(l.newGame),
+                    ),
+                  ],
+                ),
+              )
+            // Game over overlay
+            else if (gameOver)
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16.0),
+                color: Colors.black54,
+                child: Column(
+                  children: [
+                    Text(
+                      l.gameOver,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 28,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    ElevatedButton(
+                      onPressed: () => setState(_initializeGame),
+                      child: Text(l.playAgain),
                     ),
                   ],
                 ),
@@ -372,7 +710,7 @@ class _GameScreenState extends State<GameScreen> {
             Padding(
               padding: const EdgeInsets.all(16.0),
               child: Text(
-                'Swipe to move tiles. Merge same numbers to get 2048!',
+                l.swipeHint,
                 textAlign: TextAlign.center,
                 style: TextStyle(color: Colors.grey[700]),
               ),
@@ -386,9 +724,31 @@ class _GameScreenState extends State<GameScreen> {
 
 enum Direction { up, down, left, right }
 
+/// 一個方塊：id 穩定（undo 還原同一批 id，動畫才能滑回去），
+/// [isNew]/[justMerged] 只影響 scale 動畫，[removed] 的方塊滑到合併格後消失。
+class Tile {
+  final int id;
+  int value;
+  int row;
+  int col;
+  bool isNew;
+  bool justMerged;
+  bool removed;
+
+  Tile({
+    required this.id,
+    required this.value,
+    required this.row,
+    required this.col,
+    this.isNew = false,
+    this.justMerged = false,
+    this.removed = false,
+  });
+}
+
 class _Snapshot {
-  final List<List<int>> board;
+  final List<({int id, int value, int row, int col})> tiles;
   final int score;
 
-  _Snapshot(this.board, this.score);
+  _Snapshot(this.tiles, this.score);
 }
