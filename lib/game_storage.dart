@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'settings_keys.dart';
@@ -46,8 +47,9 @@ class SavedGame {
             ),
         ],
         score: json['score'] as int,
-        moves: json['moves'] as int,
-        undoCount: json['undoCount'] as int,
+        // 可選欄位給預設值：舊版 build 寫的存檔缺欄位時不要整份丟掉（靜默資料流失）。
+        moves: json['moves'] as int? ?? 0,
+        undoCount: json['undoCount'] as int? ?? 0,
         keepPlaying: json['keepPlaying'] as bool? ?? false,
       );
 }
@@ -133,8 +135,13 @@ class GameStorage {
     }
   }
 
-  Future<void> saveGame(SavedGame game) =>
-      _prefs.setString(Prefs.savedGame, jsonEncode(game.toJson()));
+  Future<void> saveGame(SavedGame game) async {
+    try {
+      await _prefs.setString(Prefs.savedGame, jsonEncode(game.toJson()));
+    } catch (e) {
+      debugPrint('d2048 saveGame failed: $e');
+    }
+  }
 
   List<BoardSnapshot> loadSnapshots() {
     final raw = _prefs.getString(Prefs.snapshots);
@@ -149,8 +156,13 @@ class GameStorage {
     }
   }
 
-  Future<void> saveSnapshots(List<BoardSnapshot> list) =>
-      _prefs.setString(Prefs.snapshots, jsonEncode([for (final s in list) s.toJson()]));
+  Future<void> saveSnapshots(List<BoardSnapshot> list) async {
+    try {
+      await _prefs.setString(Prefs.snapshots, jsonEncode([for (final s in list) s.toJson()]));
+    } catch (e) {
+      debugPrint('d2048 saveSnapshots failed: $e');
+    }
+  }
 
   int bestScore(int size) {
     final raw = _prefs.getString(Prefs.bestScores);
@@ -175,7 +187,11 @@ class GameStorage {
       }
     }
     map[size.toString()] = score;
-    await _prefs.setString(Prefs.bestScores, jsonEncode(map));
+    try {
+      await _prefs.setString(Prefs.bestScores, jsonEncode(map));
+    } catch (e) {
+      debugPrint('d2048 setBestScore failed: $e');
+    }
   }
 
   GameStats loadStats() {
@@ -188,6 +204,11 @@ class GameStorage {
     }
   }
 
-  Future<void> saveStats(GameStats stats) =>
-      _prefs.setString(Prefs.stats, jsonEncode(stats.toJson()));
+  Future<void> saveStats(GameStats stats) async {
+    try {
+      await _prefs.setString(Prefs.stats, jsonEncode(stats.toJson()));
+    } catch (e) {
+      debugPrint('d2048 saveStats failed: $e');
+    }
+  }
 }

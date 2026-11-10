@@ -12,8 +12,8 @@ class SettingsModel extends ChangeNotifier {
 
   SettingsModel._(this._prefs);
 
-  static Future<SettingsModel> load() async {
-    final prefs = await SharedPreferences.getInstance();
+  /// [prefs] 由呼叫端傳入（main() 已取過同一份 cached instance，不必再 getInstance）。
+  static Future<SettingsModel> load(SharedPreferences prefs) async {
     final model = SettingsModel._(prefs);
     await model._loadPreferences();
     return model;
@@ -70,9 +70,9 @@ class SettingsModel extends ChangeNotifier {
       case 'en':
         return const Locale('en', '');
       case 'zh_Hant':
-        return const Locale('zh', 'Hant');
+        return const Locale.fromSubtags(languageCode: 'zh', scriptCode: 'Hant');
       case 'zh_Hans':
-        return const Locale('zh', 'Hans');
+        return const Locale.fromSubtags(languageCode: 'zh', scriptCode: 'Hans');
       case 'system':
       default:
         return null;

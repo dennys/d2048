@@ -23,6 +23,7 @@ flutter run
 ## 建置 APK
 
 只出 arm64（通用 APK 會多塞兩份引擎庫）；CI（`.github/workflows/github_action.yaml`）跑 analyze / test / debug+release APK。
+注意：APK 只含 arm64-v8a 引擎庫 → x86-64 模擬器（Android Studio 預設）或 x86 裝置裝了也開不起來；要測就用 arm64 模擬器或真機。
 
 | 機器 | debug | release |
 |---|---|---|

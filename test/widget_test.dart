@@ -12,15 +12,20 @@ void main() {
 
   Future<SettingsModel> loadSettings() async {
     SharedPreferences.setMockInitialValues({});
-    return SettingsModel.load();
+    final prefs = await SharedPreferences.getInstance();
+    return SettingsModel.load(prefs);
   }
 
-  Map<int, int> countValues(Iterable<int> values) {
-    final m = <int, int>{};
-    for (final v in values) {
-      m[v] = (m[v] ?? 0) + 1;
-    }
-    return m;
+  /// 預存一份確定性存檔（app 啟動時接續），讓 board 不依賴隨機。
+  Future<void> seedBoard(SharedPreferences prefs, List<({int id, int value, int row, int col})> tiles) async {
+    await GameStorage(prefs).saveGame(SavedGame(
+      boardSize: 4,
+      tiles: tiles,
+      score: 0,
+      moves: 0,
+      undoCount: 0,
+      keepPlaying: false,
+    ));
   }
 
   /// 目前 board 上的方塊（tile id → (value, row, col)）。
@@ -104,42 +109,67 @@ void main() {
   testWidgets('left move follows the merge rule (one merge per pair)', (tester) async {
     final settings = await loadSettings();
     final prefs = await SharedPreferences.getInstance();
-    await tester.pumpWidget(Game2048App(settings: settings, prefs: prefs, random: Random(42)));
+    await seedBoard(prefs, [
+      (id: 1, value: 2, row: 0, col: 0),
+      (id: 2, value: 2, row: 0, col: 1),
+      (id: 3, value: 4, row: 0, col: 2),
+    ]);
+    await tester.pumpWidget(Game2048App(settings: settings, prefs: prefs));
     await tester.pumpAndSettle();
 
-    final before = readBoard(tester, 4);
-    // 參考實作：同一行依左→右排序，相鄰同值合併一次（2,2,4 走左 = 4,4，不是 8,0）。
-    final rows = <int, List<int>>{};
-    for (final e in before.entries) {
-      rows.putIfAbsent(e.value.$2, () => []).add(e.value.$1);
-    }
-    final expected = <int>[]; // multiset（保留重複值）
-    for (final list in rows.values) {
-      final sorted = list..sort();
-      var i = 0;
-      while (i < sorted.length) {
-        if (i + 1 < sorted.length && sorted[i] == sorted[i + 1]) {
-          expected.add(sorted[i] * 2);
-          i += 2;
-        } else {
-          expected.add(sorted[i]);
-          i += 1;
-        }
-      }
-    }
-    // 合併後會多一個新方塊（2 或 4）—— 用 multiset 比較（spawn 值可能和 expected 重疊）。
+    // 2,2,4 走左 → 4,4（每對只合併一次，不是 8,0）
     await swipe(tester, -200, 0);
-    final after = readBoard(tester, 4);
-    final actualCounts = countValues(after.values.map((v) => v.$1));
-    final expectedCounts = countValues(expected);
-    final spawnCounts = <int, int>{};
-    for (final e in actualCounts.entries) {
-      final diff = e.value - (expectedCounts[e.key] ?? 0);
-      if (diff > 0) spawnCounts[e.key] = diff;
-    }
-    expect(spawnCounts.length, 1);
-    expect(spawnCounts.keys.single, anyOf(2, 4));
-    expect(spawnCounts.values.single, 1);
+    await tester.pumpAndSettle();
+    final board = readBoard(tester, 4);
+    expect(board[1], (4, 0, 0)); // 2+2 合併
+    expect(board[3], (4, 0, 1));
+    expect(board[2], (2, 0, 0)); // 被合併殘骸（蓋住，下一手才清）
+    expect(board.length, 4); // +1 新方塊（id 4，不撞已存在的 1..3）
+    expect(board[4]?.$1, anyOf(2, 4));
+  });
+
+  testWidgets('right move follows the merge rule', (tester) async {
+    final settings = await loadSettings();
+    final prefs = await SharedPreferences.getInstance();
+    await seedBoard(prefs, [
+      (id: 1, value: 2, row: 0, col: 0),
+      (id: 2, value: 4, row: 0, col: 1),
+      (id: 3, value: 4, row: 0, col: 2),
+    ]);
+    await tester.pumpWidget(Game2048App(settings: settings, prefs: prefs));
+    await tester.pumpAndSettle();
+
+    // 2,4,4 走右 → 2,8（兩個 4 在右邊合併，2 停在旁邊；方塊不能互相穿越）
+    await swipe(tester, 200, 0);
+    await tester.pumpAndSettle();
+    final board = readBoard(tester, 4);
+    expect(board[3], (8, 0, 3));
+    expect(board[1], (2, 0, 2));
+    expect(board[2], (4, 0, 3)); // 殘骸
+    expect(board.length, 4);
+    expect(board[4]?.$1, anyOf(2, 4));
+  });
+
+  testWidgets('down move follows the merge rule', (tester) async {
+    final settings = await loadSettings();
+    final prefs = await SharedPreferences.getInstance();
+    await seedBoard(prefs, [
+      (id: 1, value: 2, row: 0, col: 0),
+      (id: 2, value: 4, row: 1, col: 0),
+      (id: 3, value: 4, row: 2, col: 0),
+    ]);
+    await tester.pumpWidget(Game2048App(settings: settings, prefs: prefs));
+    await tester.pumpAndSettle();
+
+    // 2,4,4 走下 → 2,8（兩個 4 在底邊合併）
+    await swipe(tester, 0, 200);
+    await tester.pumpAndSettle();
+    final board = readBoard(tester, 4);
+    expect(board[3], (8, 3, 0));
+    expect(board[1], (2, 2, 0));
+    expect(board[2], (4, 3, 0)); // 殘骸
+    expect(board.length, 4);
+    expect(board[4]?.$1, anyOf(2, 4));
   });
 
   testWidgets('new game dialog picks board size', (tester) async {
@@ -251,6 +281,19 @@ void main() {
     await tester.tap(find.text('Keep playing'));
     await tester.pumpAndSettle();
     expect(find.text('You win!'), findsNothing);
+
+    // undo 過關那手 → overlay 消失、board 回到兩個 1024、moves 回滾、可以继续滑
+    await tester.tap(find.text('Undo'));
+    await tester.pumpAndSettle();
+    expect(find.text('You win!'), findsNothing);
+    final undone = readBoard(tester, 4);
+    expect(undone.length, 2);
+    expect(undone.values.every((v) => v.$1 == 1024), isTrue);
+    expect(find.textContaining('Moves: 0'), findsOneWidget);
+    // 再滑一下 → 又 2048 → overlay 回來
+    await swipe(tester, -200, 0);
+    await tester.pumpAndSettle();
+    expect(find.text('You win!'), findsOneWidget);
   });
 
   testWidgets('redo restores the undone move', (tester) async {

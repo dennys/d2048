@@ -28,7 +28,8 @@ Color tileColor(int value) {
     case 2048:
       return Colors.amber[800]!;
     default:
-      return Colors.red[400]!;
+      // 4096 以上：四檔紅循環，高方塊可分辨
+      return [Colors.red[400]!, Colors.red[500]!, Colors.red[600]!, Colors.red[700]!][(value ~/ 2048) % 4];
   }
 }
 

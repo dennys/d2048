@@ -15,7 +15,7 @@ import 'widgets/snapshots.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   final prefs = await SharedPreferences.getInstance();
-  final settings = await SettingsModel.load(); // 載入完成才 runApp：首幀就是正確的設定值
+  final settings = await SettingsModel.load(prefs); // 載入完成才 runApp：首幀就是正確的設定值
   runApp(Game2048App(settings: settings, prefs: prefs));
 }
 
@@ -130,7 +130,11 @@ class _GameScreenState extends State<GameScreen> {
     won = tiles.any((t) => t.value >= 2048);
     keepPlaying = saved.keepPlaying;
     gameOver = !_canMove();
+    _syncNextId();
   }
+
+  /// 還原 board 後同步 _nextId，避免新方塊 id 撞已存在的 tile（ValueKey 重複）。
+  void _syncNextId() => _nextId = tiles.fold(1, (m, t) => t.id > m ? t.id : m) + 1;
 
   void _addRandomTile() {
     final occupied = <int>{for (final t in tiles) if (!t.removed) t.row * size + t.col};
@@ -171,11 +175,14 @@ class _GameScreenState extends State<GameScreen> {
     final scoreBefore = score;
     var merges = 0;
     final at = <int, Tile>{for (final t in tiles) t.row * size + t.col: t};
+    // right/down 從目標邊收線：tile 順序才和 _applyLine 的打包方向一致（否則方塊互相穿越）。
+    final fromEdge = direction == Direction.right || direction == Direction.down;
     for (var i = 0; i < size; i++) {
       final line = <Tile>[];
       for (var j = 0; j < size; j++) {
-        final r = (direction == Direction.up || direction == Direction.down) ? j : i;
-        final c = (direction == Direction.up || direction == Direction.down) ? i : j;
+        final k = fromEdge ? size - 1 - j : j;
+        final r = (direction == Direction.up || direction == Direction.down) ? k : i;
+        final c = (direction == Direction.up || direction == Direction.down) ? i : k;
         final t = at[r * size + c];
         if (t != null) line.add(t);
       }
@@ -277,6 +284,11 @@ class _GameScreenState extends State<GameScreen> {
   _Snapshot _takeSnapshot() => _Snapshot(
         [for (final t in tiles) if (!t.removed) (id: t.id, value: t.value, row: t.row, col: t.col)],
         score,
+        moves,
+        won,
+        keepPlaying,
+        stats.totalMerges,
+        stats.wins,
       );
 
   void _restoreSnapshot(_Snapshot snapshot) {
@@ -284,6 +296,11 @@ class _GameScreenState extends State<GameScreen> {
       ..clear()
       ..addAll([for (final t in snapshot.tiles) Tile(id: t.id, value: t.value, row: t.row, col: t.col)]);
     score = snapshot.score;
+    moves = snapshot.moves;
+    won = snapshot.won;
+    keepPlaying = snapshot.keepPlaying;
+    stats.totalMerges = snapshot.totalMerges;
+    stats.wins = snapshot.wins;
     gameOver = false;
   }
 
@@ -382,6 +399,7 @@ class _GameScreenState extends State<GameScreen> {
       best = storage.bestScore(size);
       _gain = 0;
       _persist();
+      _syncNextId();
     });
   }
 
@@ -749,6 +767,11 @@ class Tile {
 class _Snapshot {
   final List<({int id, int value, int row, int col})> tiles;
   final int score;
+  final int moves;
+  final bool won;
+  final bool keepPlaying;
+  final int totalMerges;
+  final int wins;
 
-  _Snapshot(this.tiles, this.score);
+  _Snapshot(this.tiles, this.score, this.moves, this.won, this.keepPlaying, this.totalMerges, this.wins);
 }
