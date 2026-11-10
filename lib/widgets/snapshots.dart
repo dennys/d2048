@@ -105,11 +105,11 @@ class _SaveSnapshotDialogState extends State<_SaveSnapshotDialog> {
   }
 }
 
-/// 快照 list 對話框：tap 載入、🗑 刪除（[onDelete] 由呼叫方負責持久化）。
+/// 快照 list 對話框：tap 載入、🗑 刪除（[onDelete] 收到刪除後的完整 list，由呼叫方負責持久化）。
 class SnapshotListDialog extends StatefulWidget {
   final List<BoardSnapshot> snapshots;
   final void Function(BoardSnapshot snapshot) onLoad;
-  final void Function(BoardSnapshot snapshot) onDelete;
+  final void Function(List<BoardSnapshot> remaining) onDelete;
 
   const SnapshotListDialog({
     super.key,
@@ -151,7 +151,7 @@ class _SnapshotListDialogState extends State<SnapshotListDialog> {
                       icon: const Icon(Icons.delete_outline),
                       onPressed: () {
                         setState(() => _items.removeAt(i));
-                        widget.onDelete(s);
+                        widget.onDelete(_items);
                       },
                     ),
                     onTap: () => widget.onLoad(s),

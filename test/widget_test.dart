@@ -1,7 +1,9 @@
+import 'dart:convert';
 import 'dart:math';
 
 import 'package:d2048/game_storage.dart';
 import 'package:d2048/main.dart';
+import 'package:d2048/settings_keys.dart';
 import 'package:d2048/settings_model.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -308,8 +310,27 @@ void main() {
 
     await tester.tap(find.text('Undo'));
     await tester.pumpAndSettle();
+    expect(find.textContaining('Undo ×1'), findsOneWidget);
     await tester.tap(find.text('Redo'));
     await tester.pumpAndSettle();
     expect(readBoard(tester, 4), equals(afterMove));
+    expect(find.textContaining('Undo ×0'), findsOneWidget); // redo 回滾 undoCount
+  });
+
+  test('loadSnapshots skips corrupted entries', () async {
+    SharedPreferences.setMockInitialValues({});
+    final prefs = await SharedPreferences.getInstance();
+    final good = BoardSnapshot(
+      name: 'good',
+      boardSize: 4,
+      tiles: [(id: 1, value: 2, row: 0, col: 0)],
+      score: 10,
+      savedAt: DateTime(2026, 11, 10),
+    );
+    // 一份好 + 一份缺 tiles 的損毀 entry。
+    await prefs.setString(Prefs.snapshots, jsonEncode([good.toJson(), {'name': 'bad', 'boardSize': 4}]));
+    final list = GameStorage(prefs).loadSnapshots();
+    expect(list.length, 1);
+    expect(list.single.name, 'good');
   });
 }

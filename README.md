@@ -1,17 +1,20 @@
 # d2048
 
-2048 puzzle game built with Flutter. Drag/swipe to slide and merge tiles.
+A 2048 puzzle game built with Flutter. Swipe to slide and merge tiles.
 
 ## Features
 
-1. Swipe (or drag) in four directions to move and merge tiles
-2. Score tracking
-3. New Game
-4. Undo (rollback) the last move
-
-## 📋 紀錄
-
-進行中的待辦在 [TODO.md](TODO.md)，已完成的歸檔在 [CHANGELOG.md](CHANGELOG.md)。
+- Swipe in four directions to move and merge tiles
+- Score, best score (per board size), move counter
+- Undo / redo
+- Board sizes 4×4 to 8×8
+- Auto-save and resume
+- Named board snapshots (save / load / delete)
+- Win detection (2048) with "keep playing"
+- Haptics on merge (optional)
+- Lifetime stats (games, wins, max tile, merges)
+- Localization: English, 繁體中文, 简体中文
+- Light / dark theme
 
 ## Run
 
@@ -20,26 +23,29 @@ flutter pub get
 flutter run
 ```
 
-## 建置 APK
+## Build (Android)
 
-只出 arm64（通用 APK 會多塞兩份引擎庫）；CI（`.github/workflows/github_action.yaml`）跑 analyze / test / debug+release APK。
-注意：APK 只含 arm64-v8a 引擎庫 → x86-64 模擬器（Android Studio 預設）或 x86 裝置裝了也開不起來；要測就用 arm64 模擬器或真機。
-
-| 機器 | debug | release |
-|---|---|---|
-| Windows（x86-64） | ✅ | ✅ |
-| GitHub Actions（ubuntu-latest，x86-64） | ✅ | ✅ artifacts |
-| Linux/aarch64（如 dgx1） | ✅ 實測 77 MiB | ❌ 沒有 linux-arm64 的 AOT `gen_snapshot`（Google 只發 x86-64 host 版；是主機平台限制，與本專案無關） |
+arm64-only APK (a universal APK would bundle two extra engine copies). The APK
+contains only the arm64-v8a engine, so it will not launch on x86-64 emulators
+or x86 devices — use an arm64 emulator or a real device.
 
 ```bash
-flutter build apk --debug  --target-platform android-arm64
+flutter build apk --debug   --target-platform android-arm64
 flutter build apk --release --target-platform android-arm64
 ```
 
-### 簽名
+CI (`.github/workflows/github_action.yaml`) runs analyze, tests, and builds
+debug + release APKs.
 
-模板預設是 debug 簽章，而每台 CI runner 的 debug key 都是現生的 → 每版簽名不同，只能砍掉重裝。
-`android/app/build.gradle.kts` 已改成與 dNeko／dHealth 同一套：有 `android/app/{d2048.keystore,key.properties}`
-（或 CI secrets `KEYSTORE_B64` / `KEY_PROPERTIES`）就用固定鑰，沒有就退回 debug 簽章（fork 不会紅）。
-要正式發版時再生一把 keystore（全案只准一把，換鑰 = 舊安裝無法覆蓋升級），指令與注意事項見 dNeko／dHealth 的 README。
+### Signing
 
+Without a keystore, the release APK falls back to the debug signature. Each CI
+runner generates its own debug key, so signatures differ per build and Android
+refuses in-place upgrades; the artifact is named `-debugsigned` to make this
+explicit. To sign properly, provide `android/app/{d2048.keystore,key.properties}`
+or the CI secrets `KEYSTORE_B64` / `KEY_PROPERTIES` (shared with dNeko / dHealth).
+Use one keystore for release — rotating it later breaks in-place upgrades.
+
+## Records
+
+In-progress work: [TODO.md](TODO.md). Completed work: [CHANGELOG.md](CHANGELOG.md).

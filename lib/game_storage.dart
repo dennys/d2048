@@ -79,7 +79,7 @@ class BoardSnapshot {
       };
 
   factory BoardSnapshot.fromJson(Map<String, dynamic> json) => BoardSnapshot(
-        name: json['name'] as String,
+        name: json['name'] as String? ?? '',
         boardSize: json['boardSize'] as int,
         tiles: [
           for (final t in json['tiles'] as List<dynamic>)
@@ -90,8 +90,8 @@ class BoardSnapshot {
               col: t['col'] as int,
             ),
         ],
-        score: json['score'] as int,
-        savedAt: DateTime.fromMillisecondsSinceEpoch(json['savedAt'] as int),
+        score: json['score'] as int? ?? 0,
+        savedAt: DateTime.fromMillisecondsSinceEpoch(json['savedAt'] as int? ?? 0),
       );
 }
 
@@ -146,14 +146,23 @@ class GameStorage {
   List<BoardSnapshot> loadSnapshots() {
     final raw = _prefs.getString(Prefs.snapshots);
     if (raw == null) return [];
+    final List<dynamic> decoded;
     try {
-      return [
-        for (final e in jsonDecode(raw) as List<dynamic>)
-          BoardSnapshot.fromJson(e as Map<String, dynamic>),
-      ];
+      decoded = jsonDecode(raw) as List<dynamic>;
     } catch (_) {
       return [];
     }
+    // 逐個 parse：一個損毀的快照不該連累其他。
+    final result = <BoardSnapshot>[];
+    for (final e in decoded) {
+      if (e is! Map<String, dynamic>) continue;
+      try {
+        result.add(BoardSnapshot.fromJson(e));
+      } catch (_) {
+        // 跳過損毀 entry
+      }
+    }
+    return result;
   }
 
   Future<void> saveSnapshots(List<BoardSnapshot> list) async {

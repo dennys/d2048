@@ -301,6 +301,7 @@ class _GameScreenState extends State<GameScreen> {
     keepPlaying = snapshot.keepPlaying;
     stats.totalMerges = snapshot.totalMerges;
     stats.wins = snapshot.wins;
+    _gain = 0; // undo/redo 清掉上一手的 +N 浮字
     gameOver = false;
   }
 
@@ -320,6 +321,7 @@ class _GameScreenState extends State<GameScreen> {
     final snapshot = redoStack.removeLast();
     history.add(_takeSnapshot());
     _restoreSnapshot(snapshot);
+    if (undoCount > 0) undoCount--; // redo 回滾淨 undo 數
     _persist();
   }
 
@@ -372,10 +374,8 @@ class _GameScreenState extends State<GameScreen> {
           Navigator.pop(dialogContext);
           _loadSnapshot(s);
         },
-        onDelete: (s) {
-          final list = storage.loadSnapshots()
-            ..removeWhere((x) => x.name == s.name && x.savedAt == s.savedAt);
-          storage.saveSnapshots(list);
+        onDelete: (remaining) {
+          storage.saveSnapshots(remaining);
         },
       ),
     );
