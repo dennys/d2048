@@ -5,6 +5,32 @@
 新的完成紀錄加在最上面。
 
 ---
+## 2026-11-10 Code review 修正（REVIEW.md 14 項，review 檔已併入本檔刪除）
+
+Read-only review（`REVIEW.md`，已刪）對 2026-11-10 功能 backlog commit（`a675834`）的 14 項發現：13 項全清、1 項半清（剩 class 合併，搬 TODO.md）。
+
+- **Must fix**
+  - Leaderboard dialog layout 崩潰（5 個 `RadioListTile` 放 `Row` → 無限寬 assert；debug 紅屏、release 渲染壞）→ 每個包 `Expanded`
+  - Leaderboard 格數 picker 不 stick（`var size = initialSize` 在 `StatefulBuilder` builder 內，每次 rebuild 重設）→ 移出 builder
+  - New Game 選目前尺寸無反應（`RadioGroup.onChanged` 只在 selection 改變時觸發）→ `groupValue: null`（每個 tap 都算改變；代價：目前尺寸不高亮）
+- **Should fix**
+  - Daily 後回不到普通局（Daily 替換記憶體狀態、只能重啟 app 拿回、New Game 會覆蓋普通存檔）→ Daily 按鈕改 Daily↔普通 toggle：切走前 `_persist` 目前局、再按切回（l10n 新增 `normal` ×4 語）
+  - Daily 分數計入 per-size best 與 leaderboard（`_afterMove` 不看 mode）→ `if (mode == GameMode.normal && score > best)`
+  - Share 截圖檔堆積 + web 炸（檔名帶 timestamp、`writeAsBytesSync` 在 UI thread、`dart:io` File 在 web throw）→ 固定檔名 `d2048_share.png` + `await writeAsBytes` + `kIsWeb` skip
+  - 損毀存檔靜默丟 board（`loadSavedGame` catch 回 null 無 log，寫入路徑都有）→ 加 `debugPrint`
+  - Leaderboard dialog 無測試（沒測的 dialog 正是會崩的那個）→ 新測試：開 leaderboard、tap 6×6、expect 6×6 欄
+  - 每步兩個未 await 的寫入（fire-and-forget；app 被 kill 最後一步不落盤）→ `_persist` 串接寫入（`_pending.then`，依序落盤）
+- **Nice to have**
+  - `SavedGame.mode` 冗餘（key 已表達 mode）→ 刪欄位（保留 `seed`）、`_restoreSaved` 改收 mode 參數；舊存檔多出的欄位被 fromJson 忽略、照讀
+  - Tile 序列化 5 份 → `_tilesToJson`/`_tilesFromJson`（`game_storage.dart`）+ `_tileData()`（`main.dart`）；**兩 class 合併未做**（見 TODO.md）
+  - TODO.md 過時「470 行」數字 → 刪
+  - Leaderboard row 兩 dialog 重複 → `_rankRow` helper
+  - Share text 報 board 已不存在的 maxTile（`_gameMaxTile` undo 不回滾）→ 從 `tiles` 重算
+- **測試修正**：daily／auto-resume 測試的「重啟」是假的——`pumpWidget` 同型別 widget 會保留 State（`initState` 不重跑），舊測試靠 State 沒被銷毀才過。改先 pump 空 widget 銷毀 State 再重開，才是真重啟。
+- **Review 誤判一則**：review 的「undo 吃掉剛 spawn 的 tile」是 false positive——snapshot 在移動前拍，undo 還原移動前狀態（新 tile 消失、score 回滾）正是正確行為；測試 `expect(readBoard, equals(before))` 斷言的就是正確行為。已從 review 移除。
+- 驗收：`flutter analyze` No issues、`flutter test` 18/18（原 17 + 新 leaderboard dialog）。
+
+---
 ## 2026-11-10 功能 backlog 5 項：per-player／每日排行榜／里程碑慶祝／分享／本地排行榜
 
 - **Per-player Profiles**（`lib/game_storage.dart`、`lib/widgets/players.dart`）：遊戲資料全部按玩家 namespace（`saved_game/<player>`、`saved_game_daily/<player>`、`snapshots/<player>`、`best_scores/<player>`、`stats/<player>`）+ `players`（name list）+ `current_player`。首次啟動輸入名字（placeholder 畫面 + dialog，取消可重按）；AppBar 玩家 chip（person icon + 名字）tap 切換／新增。遷移：舊全域 4 個 key 首次跑新 code 時搬進預設玩家 `"Player"` 並刪舊 key（`players` key 存在即跳過，只跑一次）。

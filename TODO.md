@@ -3,6 +3,14 @@
 慣例：一個待辦一段，寫清「檔案:行」與「為什麼现在是這樣」；**做完就搬到 `CHANGELOG.md`**（`git log` 才是權威）。
 
 ---
+## 2026-11-10 待辦：SavedGame／BoardSnapshot 合併（REVIEW.md finding 11 剩半）
+
+> tile 序列化去重已完成（`lib/game_storage.dart:18,22` 的 `_tilesToJson`/`_tilesFromJson` + `lib/main.dart` 的 `_tileData()`，見 CHANGELOG 2026-11-10 review 修正）；剩下的是把兩個 class 併成一個。
+
+- **為什麼現在是這樣**：兩 class 的 JSON 格式不同（`SavedGame`（`game_storage.dart:33`）有 moves/undoCount/keepPlaying/seed，`BoardSnapshot`（`game_storage.dart:75`）有 name/savedAt），合併要一堆 optional 欄位，風險大、可讀性反而變差，所以先只做序列化 helper。
+- **做法**：併成一個 class（optional 欄位），保留現有 JSON keys 讓舊存檔照讀；驗收 `flutter test`（migration／snapshot／daily 測試）。
+
+---
 ## 2026-11-10 待辦：新功能 backlog（re-review 後討論）
 
 > 依 effort/回報排序，★ = 建議先做。場景：主要我和家人幾個人用，可能同一支手機多人共用。
