@@ -1093,6 +1093,56 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('settings screen renders and language / theme / haptics take effect', (tester) async {
+    // lib/widgets/settings_screen.dart 之前覆蓋 0%：整頁從未渲染過，語言／主題／震動
+    // 的切换完全無人守（dropdown 选不选得動、改了會不會真的生效）。
+    SharedPreferences.setMockInitialValues({});
+    final prefs = await SharedPreferences.getInstance();
+    await seedPlayer(prefs, 'Amy');
+    await GameStorage(prefs).saveStats(GameStats(gamesPlayed: 3, maxTile: 64, totalMerges: 9), 'Amy');
+    final settings = await SettingsModel.load(prefs);
+    await tester.pumpWidget(Game2048App(settings: settings, prefs: prefs, random: Random(1)));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byIcon(Icons.settings_outlined));
+    await tester.pumpAndSettle();
+    expect(find.text('Settings'), findsWidgets);
+    expect(find.text('Games played'), findsOneWidget); // stats 那一區也要真的渲染
+
+    // 語言：選繁體中文 → SettingsModel 舆整個 app 的 locale 都跟過去
+    await tester.tap(find.byType(DropdownButton<String>).first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Traditional Chinese'));
+    await tester.pumpAndSettle();
+    expect(settings.language, 'zh_Hant');
+    expect(tester.widget<MaterialApp>(find.byType(MaterialApp)).locale,
+        const Locale.fromSubtags(languageCode: 'zh', scriptCode: 'Hant'));
+    expect(find.text('局數'), findsOneWidget);
+
+    // 主題：深色
+    await tester.tap(find.byType(DropdownButton<String>).last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('深色'));
+    await tester.pumpAndSettle();
+    expect(settings.theme, 'dark');
+    expect(tester.widget<MaterialApp>(find.byType(MaterialApp)).themeMode, ThemeMode.dark);
+
+    // 震動
+    expect(settings.haptics, isFalse);
+    await tester.tap(find.byType(Switch));
+    await tester.pumpAndSettle();
+    expect(settings.haptics, isTrue);
+
+    // 統計那區在 ListView 下方：捲下去看它真的把數字畫出來
+    await tester.drag(find.byType(ListView), const Offset(0, -300));
+    await tester.pumpAndSettle();
+    expect(find.text('總合併數'), findsOneWidget);
+    expect(find.text('64'), findsOneWidget);
+    expect(find.text('9'), findsOneWidget);
+
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('layout survives a narrow phone with large system text', (tester) async {
     tester.view.physicalSize = const Size(320, 640);
     tester.view.devicePixelRatio = 1.0;
