@@ -1079,7 +1079,10 @@ class _GameScreenState extends State<GameScreen> {
                           ),
                           const SizedBox(height: 16),
                           ElevatedButton(
-                            onPressed: () => setState(_initializeGame),
+                            // daily 破局：Play Again 一律回普通局。直接 _initializeGame 會沿用 daily 的
+                            // 4×4 開一局普通局（也不讀 settings.boardSize），同病因 _restoreNormal()
+                            // 已修過，這條路徑漏了。
+                            onPressed: mode == GameMode.daily ? _restoreNormal : () => setState(_initializeGame),
                             child: Text(l.playAgain),
                           ),
                         ]),

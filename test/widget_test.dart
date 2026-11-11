@@ -835,6 +835,55 @@ void main() {
     expect(cells, findsNWidgets(16)); // 沿用 8×8 就會变 64，家庭每日排行就不可比
   });
 
+  testWidgets('Play Again after a daily game over goes back to the normal board size', (tester) async {
+    // 遮罩的 Play Again 之前直接 setState(_initializeGame)：mode 預設 normal、size 沿用
+    // daily 的 4 → 原本玩 8×8 的人破局後拿到一局普通的 4×4，最高分也改成看 4×4 那欄。
+    SharedPreferences.setMockInitialValues({});
+    final prefs = await SharedPreferences.getInstance();
+    await seedPlayer(prefs);
+    // 塞一局已破局的 daily（封盤、無相鄰同值）→ 按 Daily 就會直接看到破局遮罩。
+    final dead = [
+      for (var r = 0; r < 4; r++)
+        for (var c = 0; c < 4; c++) (id: r * 4 + c + 1, value: (r + c) % 2 == 0 ? 2 : 4, row: r, col: c),
+    ];
+    await GameStorage(prefs).saveGame(
+      SavedGame(
+        boardSize: 4,
+        tiles: dead,
+        score: 400,
+        moves: 30,
+        undoCount: 0,
+        keepPlaying: false,
+        seed: dailySeedFor(DateTime.now()),
+      ),
+      GameMode.daily,
+      'Player',
+    );
+    final settings = await SettingsModel.load(prefs);
+    await tester.pumpWidget(Game2048App(settings: settings, prefs: prefs, random: Random(1)));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('New Game'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('8×8'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Daily'));
+    await tester.pumpAndSettle();
+    expect(find.text('Game Over!'), findsOneWidget);
+
+    await tester.tap(find.text('Play Again'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Game Over!'), findsNothing);
+    expect(find.text('Normal'), findsNothing); // 已回到普通局（按鈕才顯示「Daily」）
+    final cells = find.byWidgetPredicate(
+      (w) => w is Container && (w.decoration as BoxDecoration?)?.color == Colors.grey[300],
+    );
+    expect(cells, findsNWidgets(64)); // 沿用 daily 的 4×4 就是 16
+    expect(readBoard(tester, 8).length, 2);
+  });
+
   testWidgets('player picker stays usable with many players', (tester) async {
     SharedPreferences.setMockInitialValues({});
     final prefs = await SharedPreferences.getInstance();
