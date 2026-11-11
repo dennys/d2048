@@ -439,6 +439,30 @@ void main() {
     expect(prefs.containsKey(Prefs.stats), isFalse);
   });
 
+  test('addPlayer normalizes names (trim / 20 字上限 / 大小寫去重)', () async {
+    // 這組行為（trim → runes.take(20) 限長 → 大小寫不分去重 → 全空白不建玩家）之先零測試。
+    SharedPreferences.setMockInitialValues({});
+    final prefs = await SharedPreferences.getInstance();
+    final storage = GameStorage(prefs);
+    expect(await storage.addPlayer('Amy'), 'Amy');
+
+    // 同名（大小寫不同 + 前後空白）→ 合併成既有的 Amy，不另開一位
+    expect(await storage.addPlayer('  amy  '), 'Amy');
+    expect(storage.currentPlayer, 'Amy');
+    expect(storage.loadPlayers(), ['Amy']);
+    expect(prefs.getString(Prefs.currentPlayer), 'Amy');
+
+    // 名字限長（AppBar 標題與排行榜才不會被超長名字撐爆）
+    final long = await storage.addPlayer('x' * 30);
+    expect(long, 'x' * PrefsDefaults.playerNameLimit);
+    expect(storage.loadPlayers(), ['Amy', 'x' * PrefsDefaults.playerNameLimit]);
+
+    // 全空白 → 不建玩家、也不換人（回傳原本的 currentPlayer）
+    expect(await storage.addPlayer('   '), 'x' * PrefsDefaults.playerNameLimit);
+    expect(storage.currentPlayer, 'x' * PrefsDefaults.playerNameLimit);
+    expect(storage.loadPlayers(), ['Amy', 'x' * PrefsDefaults.playerNameLimit]);
+  });
+
   test('empty current_player falls back to the first player', () async {
     // players 還在、current_player 卻不見（被清掉／備份還原到一半）：修之前所有讀寫都落在
     // `saved_game/`（尾巴一個 /）→ Amy 的舊資料永遠讀不到，AppBar 也只剩空白。
