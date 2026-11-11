@@ -514,4 +514,190 @@ void main() {
       expect(frame.contains(rect.bottomRight), isTrue);
     }
   });
+
+  /// 兩位玩家、各带一份可辨識的存檔：A = 分數 11（id 1,2）、B = 分數 99（id 7,8）。
+  Future<SharedPreferences> seedTwoPlayers() async {
+    SharedPreferences.setMockInitialValues({});
+    final prefs = await SharedPreferences.getInstance();
+    final storage = GameStorage(prefs);
+    await storage.addPlayer('A');
+    await storage.saveGame(
+        SavedGame(
+          boardSize: 4,
+          tiles: [(id: 1, value: 2, row: 0, col: 0), (id: 2, value: 4, row: 3, col: 3)],
+          score: 11,
+          moves: 3,
+          undoCount: 0,
+          keepPlaying: false,
+        ),
+        GameMode.normal);
+    await storage.addPlayer('B');
+    await storage.saveGame(
+        SavedGame(
+          boardSize: 4,
+          tiles: [(id: 7, value: 8, row: 1, col: 1), (id: 8, value: 16, row: 2, col: 2)],
+          score: 99,
+          moves: 5,
+          undoCount: 0,
+          keepPlaying: false,
+        ),
+        GameMode.normal);
+    await storage.setCurrentPlayer('A');
+    return prefs;
+  }
+
+  testWidgets('switching player from the list loads that player\u0027s board', (tester) async {
+    final prefs = await seedTwoPlayers();
+    final settings = await SettingsModel.load(prefs);
+    await tester.pumpWidget(Game2048App(settings: settings, prefs: prefs, random: Random(1)));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Score: 11'), findsOneWidget);
+
+    await tester.tap(find.descendant(of: find.byType(AppBar), matching: find.text('A')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('B'));
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
+    expect(find.textContaining('Score: 99'), findsOneWidget);
+    expect(readBoard(tester, 4).keys, containsAll(<int>[7, 8]));
+  });
+
+  testWidgets('typing an existing name in the Add field switches player too', (tester) async {
+    // 原本 onAdd 已把 currentPlayer 改掉，_switchPlayer 却拿活值比對而 early-return
+    // → 畫面還是 A 的盤，下一手就把 A 的棋盤寫進 B 的存檔（B 的進度消失）。
+    final prefs = await seedTwoPlayers();
+    final settings = await SettingsModel.load(prefs);
+    await tester.pumpWidget(Game2048App(settings: settings, prefs: prefs, random: Random(1)));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.descendant(of: find.byType(AppBar), matching: find.text('A')));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField), 'B');
+    await tester.tap(find.widgetWithText(ElevatedButton, 'Add'));
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
+    expect(find.textContaining('Score: 99'), findsOneWidget);
+
+    await swipe(tester, -200, 0);
+    await tester.pumpAndSettle();
+    final bSave = GameStorage(prefs);
+    await bSave.setCurrentPlayer('B');
+    expect(bSave.loadSavedGame(GameMode.normal)!.tiles.map((t) => t.id), containsAll(<int>[7, 8]));
+  });
+
+  testWidgets('player dialogs do not use a disposed controller', (tester) async {
+    // 對白框的 controller 如果在 showDialog resolve 當下就 dispose，退場動畫期間
+    // TextField 會用到已釋放的 controller（debug 噴 assertion，畫面直接坏）。
+    SharedPreferences.setMockInitialValues({});
+    final prefs = await SharedPreferences.getInstance();
+    final settings = await SettingsModel.load(prefs);
+    await tester.pumpWidget(Game2048App(settings: settings, prefs: prefs, random: Random(1)));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(find.byType(TextField), 'Daddy'); // 首次啟動的「誰在玩」
+    await tester.tap(find.widgetWithText(ElevatedButton, 'Save'));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    expect(GameStorage(prefs).currentPlayer, 'Daddy');
+
+    await tester.tap(find.descendant(of: find.byType(AppBar), matching: find.text('Daddy')));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField), 'Mum');
+    await tester.tap(find.widgetWithText(ElevatedButton, 'Add'));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    expect(GameStorage(prefs).currentPlayer, 'Mum');
+  });
+
+  testWidgets('win overlay covers the board without shrinking it', (tester) async {
+    final settings = await loadSettings();
+    final prefs = await SharedPreferences.getInstance();
+    await seedPlayer(prefs);
+    await GameStorage(prefs).saveSnapshots([
+      BoardSnapshot(
+        name: 'win',
+        boardSize: 4,
+        tiles: [(id: 1, value: 1024, row: 0, col: 0), (id: 2, value: 1024, row: 0, col: 1)],
+        score: 100,
+        savedAt: DateTime(2026, 11, 10),
+      ),
+    ]);
+    await tester.pumpWidget(Game2048App(settings: settings, prefs: prefs));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byIcon(Icons.folder_outlined));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('win'));
+    await tester.pumpAndSettle();
+
+    final boardBefore = tester.getRect(find.byType(AspectRatio));
+    await swipe(tester, -200, 0);
+    await tester.pumpAndSettle();
+    expect(find.text('You win!'), findsOneWidget);
+
+    final boardAfter = tester.getRect(find.byType(AspectRatio));
+    expect(boardAfter, boardBefore); // overlay 是蓋在棋盤上面，不是挤成另一列
+    final scrim = tester.getRect(
+      find.ancestor(of: find.text('You win!'), matching: find.byType(ColoredBox)).first,
+    );
+    expect(scrim.contains(boardAfter.center), isTrue);
+  });
+
+  testWidgets('daily game is always 4x4 whatever the last board size was', (tester) async {
+    final settings = await loadSettings();
+    final prefs = await SharedPreferences.getInstance();
+    await seedPlayer(prefs);
+    await tester.pumpWidget(Game2048App(settings: settings, prefs: prefs, random: Random(1)));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('New Game'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('8×8'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Daily'));
+    await tester.pumpAndSettle();
+
+    // 背景格 = size²（方塊用 AnimatedPositioned，不會被這個 predicate 抵到）
+    final cells = find.byWidgetPredicate(
+      (w) => w is Container && (w.decoration as BoxDecoration?)?.color == Colors.grey[300],
+    );
+    expect(cells, findsNWidgets(16)); // 沿用 8×8 就會变 64，家庭每日排行就不可比
+  });
+
+  testWidgets('player picker stays usable with many players', (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final prefs = await SharedPreferences.getInstance();
+    final storage = GameStorage(prefs);
+    for (var i = 0; i < 15; i++) {
+      await storage.addPlayer('P$i');
+    }
+    final settings = await SettingsModel.load(prefs);
+    await tester.pumpWidget(Game2048App(settings: settings, prefs: prefs, random: Random(1)));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.descendant(of: find.byType(AppBar), matching: find.text('P14')));
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
+    expect(find.widgetWithText(ElevatedButton, 'Add'), findsOneWidget); // 「新增」那列還在
+  });
+
+  testWidgets('layout survives a narrow phone with large system text', (tester) async {
+    tester.view.physicalSize = const Size(320, 640);
+    tester.view.devicePixelRatio = 1.0;
+    tester.platformDispatcher.textScaleFactorTestValue = 1.3;
+    addTearDown(tester.view.reset);
+    addTearDown(tester.platformDispatcher.clearAllTestValues);
+
+    SharedPreferences.setMockInitialValues({});
+    final prefs = await SharedPreferences.getInstance();
+    await seedPlayer(prefs, 'Christopher Alexander');
+    final settings = await SettingsModel.load(prefs);
+    await tester.pumpWidget(Game2048App(settings: settings, prefs: prefs, random: Random(1)));
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull); // 按鈕那排與 AppBar 玩家名都不能溢出
+  });
 }

@@ -72,6 +72,14 @@ class GameScreen extends StatefulWidget {
 class _GameScreenState extends State<GameScreen> {
   static const _animDuration = Duration(milliseconds: 150);
 
+  /// 每日局固定 4×4：不然「上次的格數」會跟著 daily 走，家庭每日排行榜就變成
+  /// 8×8 的高分去跟 4×4 的分數排名（分數不可比）。
+  static const _dailyBoardSize = 4;
+
+  /// undo 深度上限：每步存整盤快照，8×8 長局會無限成長；超過這個深度就丟最老的。
+  /// shortcut: 超過 [_historyLimit] 步就不能一路 undo 回去，真要更深就把數字調大。
+  static const _historyLimit = 200;
+
   late final GameStorage storage;
 
   int size = 4;
@@ -141,13 +149,19 @@ class _GameScreenState extends State<GameScreen> {
 
   /// AppBar 玩家名 tap → 切換／新增玩家。
   Future<void> _switchPlayer() async {
+    // 開選單前先記下「畫面現在是誰」：選單裡的「新增玩家」欄打既有名字時，
+    // onAdd 已經同步把 currentPlayer 改掉，拿活值比會 early-return →
+    // 畫面還是上一位的盤，下一手就把他的棋盤寫進新玩家的存檔。
+    final shown = storage.currentPlayer;
     final chosen = await showPlayerPicker(
       context,
       players: storage.loadPlayers(),
-      current: storage.currentPlayer,
+      current: shown,
       onAdd: storage.addPlayer,
     );
-    if (chosen == null || !mounted || chosen == storage.currentPlayer) return;
+    if (chosen == null || !mounted || chosen == shown) return;
+    await _pending; // 等在飛的寫入落盤，否則那筆會寫到換好的人 namespace 下
+    if (!mounted) return;
     await storage.setCurrentPlayer(chosen);
     setState(_loadForCurrentPlayer);
   }
@@ -264,6 +278,7 @@ class _GameScreenState extends State<GameScreen> {
     }
 
     redoStack.clear(); // 新移動作廢 redo stack
+    if (history.length > _historyLimit) history.removeAt(0); // 上限：丟最老的快照
     moves++;
     _addRandomTile();
     if (!_canMove()) gameOver = true;
@@ -302,7 +317,16 @@ class _GameScreenState extends State<GameScreen> {
       keepPlaying = false; // 新過關 → 顯示 overlay（載入快照時 keepPlaying=true 不重播）
       stats.wins++;
     }
-    if (mode == GameMode.daily && score > stats.dailyBest) stats.dailyBest = score;
+    if (mode == GameMode.daily) {
+      final today = dailySeedFor(DateTime.now());
+      if (_seed != null && _seed != today) {
+        // 跨午夜還在玩：這局改算在今天頭上（昨天那筆 dailyBest 不沿用）。
+        _seed = today;
+        stats.lastDailyDate = today;
+        stats.dailyBest = 0;
+      }
+      if (score > stats.dailyBest) stats.dailyBest = score;
+    }
     if (mode == GameMode.normal && score > best) {
       best = score;
       storage.setBestScore(size, best);
@@ -440,6 +464,7 @@ class _GameScreenState extends State<GameScreen> {
       stats.lastDailyDate = seed;
       stats.dailyBest = 0; // 新的一天 → 重算今日最高
     }
+    size = _dailyBoardSize; // 每日局一律 4×4，全家分數才可比
     setState(() => _initializeGame(mode: GameMode.daily, seed: seed));
   }
 
@@ -449,6 +474,7 @@ class _GameScreenState extends State<GameScreen> {
     if (saved != null) {
       setState(() => _restoreSaved(saved, GameMode.normal));
     } else {
+      size = widget.settings.boardSize; // 不沿用 daily 剛用的 4×4
       setState(() => _initializeGame());
     }
   }
@@ -543,6 +569,10 @@ class _GameScreenState extends State<GameScreen> {
     );
     final merged = await recorder.endRecording().toImage(width, height);
     final bytes = await merged.toByteData(format: ui.ImageByteFormat.png);
+    // ui.Image 是 native 記憶體，等 GC 才收；分享幾次就會堆起來。
+    scoreImage.dispose();
+    boardImage.dispose();
+    merged.dispose();
     if (bytes == null) return;
     final file = File('${Directory.systemTemp.path}/d2048_share.png');
     await file.writeAsBytes(bytes.buffer.asUint8List());
@@ -762,6 +792,20 @@ class _GameScreenState extends State<GameScreen> {
     );
   }
 
+  /// 過關／破局的半透明遮罩：蓋在棋盤上面（Stack 的 Positioned.fill）。
+  /// 原本當做 Column 的一列 → 不但沒蓋住棋盤，還把 Expanded 的棋盤擠小。
+  Widget _scrim(List<Widget> content) => Positioned.fill(
+        child: ColoredBox(
+          color: Colors.black54,
+          child: Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: content,
+            ),
+          ),
+        ),
+      );
+
   /// +N 浮字：每次有得分的移動重開一次（key 變 → TweenAnimationBuilder 重跑）。
   Widget _gainPopup() {
     return TweenAnimationBuilder<double>(
@@ -799,24 +843,35 @@ class _GameScreenState extends State<GameScreen> {
     }
     return Scaffold(
       appBar: AppBar(
-        title: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text('2048'),
-            const SizedBox(width: 8),
-            // 目前玩家：tap 切換／新增
-            InkWell(
-              onTap: _switchPlayer,
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(Icons.person_outline, size: 18),
-                  const SizedBox(width: 4),
-                  Text(storage.currentPlayer),
-                ],
+        // FittedBox：玩家名是使用者打的、系統字體又可放大，寬度不可預測；
+        // mainAxisSize.min 的 Row 裡 Flexible 拿不到約束（不會縮），所以整排 scaleDown。
+        title: FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text('2048'),
+              const SizedBox(width: 8),
+              // 目前玩家：tap 切換／新增
+              InkWell(
+                onTap: _switchPlayer,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.person_outline, size: 18),
+                    const SizedBox(width: 4),
+                    ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 160),
+                      child: Text(
+                        storage.currentPlayer,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
         centerTitle: true,
         actions: [
@@ -860,29 +915,31 @@ class _GameScreenState extends State<GameScreen> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Stack(
-                        clipBehavior: Clip.none,
-                        children: [
-                          RepaintBoundary(
-                            key: _scoreBoundaryKey,
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  '${l.score}: $score',
-                                  style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-                                ),
-                                Text('${l.best}: $best', style: TextStyle(color: Colors.grey[700])),
-                                Text(
-                                  '${l.moves}: $moves  ${l.undoCount(undoCount)}',
-                                  style: TextStyle(color: Colors.grey[700]),
-                                ),
-                              ],
+                      Expanded(
+                        child: Stack(
+                          clipBehavior: Clip.none,
+                          children: [
+                            RepaintBoundary(
+                              key: _scoreBoundaryKey,
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    '${l.score}: $score',
+                                    style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+                                  ),
+                                  Text('${l.best}: $best', style: TextStyle(color: Colors.grey[700])),
+                                  Text(
+                                    '${l.moves}: $moves  ${l.undoCount(undoCount)}',
+                                    style: TextStyle(color: Colors.grey[700]),
+                                  ),
+                                ],
+                              ),
                             ),
-                          ),
-                          if (_gain > 0)
-                            Positioned(right: 0, top: 0, child: _gainPopup()),
-                        ],
+                            if (_gain > 0)
+                              Positioned(right: 0, top: 0, child: _gainPopup()),
+                          ],
+                        ),
                       ),
                       Column(
                         children: [
@@ -901,29 +958,34 @@ class _GameScreenState extends State<GameScreen> {
                     ],
                   ),
                   const SizedBox(height: 8),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      ElevatedButton(
-                        onPressed: history.isEmpty ? null : () => setState(_undo),
-                        child: Text(l.undo),
-                      ),
+                  // 四個按鈕靠 FittedBox 縮放，不要寫死寬度：小螢幕或系統字體放大時
+                  // 也不會溢出（原本 Row 直接排 → 窄螢幕爆掉）。
+                  FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        ElevatedButton(
+                          onPressed: history.isEmpty ? null : () => setState(_undo),
+                          child: Text(l.undo),
+                        ),
+                        const SizedBox(width: 8),
+                        ElevatedButton(
+                          onPressed: redoStack.isEmpty ? null : () => setState(_redo),
+                          child: Text(l.redo),
+                        ),
+                        const SizedBox(width: 8),
+                        ElevatedButton(
+                          onPressed: () => _newGame(),
+                          child: Text(l.newGame),
+                        ),
                       const SizedBox(width: 8),
-                      ElevatedButton(
-                        onPressed: redoStack.isEmpty ? null : () => setState(_redo),
-                        child: Text(l.redo),
-                      ),
-                      const SizedBox(width: 8),
-                      ElevatedButton(
-                        onPressed: () => _newGame(),
-                        child: Text(l.newGame),
-                      ),
-                      const SizedBox(width: 8),
-                      ElevatedButton(
-                        onPressed: _toggleDaily,
-                        child: Text(mode == GameMode.daily ? l.normal : l.daily),
-                      ),
-                    ],
+                        ElevatedButton(
+                          onPressed: _toggleDaily,
+                          child: Text(mode == GameMode.daily ? l.normal : l.daily),
+                        ),
+                      ],
+                    ),
                   ),
                 ],
               ),
@@ -943,63 +1005,6 @@ class _GameScreenState extends State<GameScreen> {
               ),
             ),
 
-            // Win overlay（過關但選擇繼續前）
-            if (won && !keepPlaying)
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(16.0),
-                color: Colors.black54,
-                child: Column(
-                  children: [
-                    Text(
-                      l.youWin,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 28,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    ElevatedButton(
-                      onPressed: () => setState(() {
-                        keepPlaying = true;
-                        _persist();
-                      }),
-                      child: Text(l.keepPlaying),
-                    ),
-                    const SizedBox(height: 8),
-                    ElevatedButton(
-                      onPressed: _newGame,
-                      child: Text(l.newGame),
-                    ),
-                  ],
-                ),
-              )
-            // Game over overlay
-            else if (gameOver)
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(16.0),
-                color: Colors.black54,
-                child: Column(
-                  children: [
-                    Text(
-                      l.gameOver,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 28,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    ElevatedButton(
-                      onPressed: () => setState(_initializeGame),
-                      child: Text(l.playAgain),
-                    ),
-                  ],
-                ),
-              ),
-
             // Swipe instructions
             Padding(
               padding: const EdgeInsets.all(16.0),
@@ -1012,6 +1017,48 @@ class _GameScreenState extends State<GameScreen> {
           ],
         ),
           ),
+        // Win overlay（過關但選擇繼續前）
+        if (won && !keepPlaying)
+          _scrim([
+            Text(
+              l.youWin,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 28,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 16),
+            ElevatedButton(
+              onPressed: () => setState(() {
+                keepPlaying = true;
+                _persist();
+              }),
+              child: Text(l.keepPlaying),
+            ),
+            const SizedBox(height: 8),
+            ElevatedButton(
+              onPressed: _newGame,
+              child: Text(l.newGame),
+            ),
+          ])
+        // Game over overlay
+        else if (gameOver)
+          _scrim([
+            Text(
+              l.gameOver,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 28,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 16),
+            ElevatedButton(
+              onPressed: () => setState(_initializeGame),
+              child: Text(l.playAgain),
+            ),
+          ]),
         // 里程碑慶祝（1024/2048/4096）：全屏動畫，1.6 秒後自動消失
         if (_celebrateTile > 0)
           IgnorePointer(

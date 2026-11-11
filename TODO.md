@@ -3,6 +3,12 @@
 慣例：一個待辦一段，寫清「檔案:行」與「為什麼现在是這樣」；**做完就搬到 `CHANGELOG.md`**（`git log` 才是權威）。
 
 ---
+## 2026-11-11 待辦：窄螢幕 + 系統大字體的實機確認
+
+- **為什麼現在是這樣**：那輪 review 報的「按鈕排／AppBar 標題溢出」是 `flutter test` 的 Ahem 字體（每字元 14×14 方塊，比真機 Roboto 寬一倍）量出來的假數字，真機 Pixel 5／Poco F5 實測不爆。已防呆：四按鈕排與 AppBar 標題 `FittedBox(scaleDown)`、分數區 `Expanded`、玩家名 `maxWidth 160` + 限長 20；測試 `layout survives a narrow phone with large system text`（320×640 + textScale 1.3）用的是**測試字體**，比真機嚴格但不等於真機。
+- **做法**：debug 版裝到機型最小的那支（≤360dp），系統字體調到最大，玩一局看 Undo/Redo/New Game/Daily 與 AppBar 玩家名有沒有黃黑條紋；有的話把 `FittedBox` 那兩處換成可捲的 `SingleChildScrollView`。
+
+---
 ## 2026-11-10 待辦：SavedGame／BoardSnapshot 合併（REVIEW.md finding 11 剩半）
 
 > tile 序列化去重已完成（`lib/game_storage.dart:18,22` 的 `_tilesToJson`/`_tilesFromJson` + `lib/main.dart` 的 `_tileData()`，見 CHANGELOG 2026-11-10 review 修正）；剩下的是把兩個 class 併成一個。

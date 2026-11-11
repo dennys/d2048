@@ -36,6 +36,9 @@ class PrefsDefaults {
   /// 快照上限：滿了擋下新存檔。
   static const snapshotLimit = 50;
 
+  /// 玩家名長度上限（AppBar 標題與排行榜才不會被超長名字撐爆）。
+  static const playerNameLimit = 20;
+
   /// 舊版全域資料遷移時搬進的預設玩家。
   static const defaultPlayer = 'Player';
 

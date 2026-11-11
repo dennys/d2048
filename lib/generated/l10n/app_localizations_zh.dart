@@ -137,9 +137,6 @@ class AppLocalizationsZh extends AppLocalizations {
   String get add => '新增';
 
   @override
-  String get switchPlayer => '切換玩家';
-
-  @override
   String get daily => '每日';
 
   @override
@@ -299,9 +296,6 @@ class AppLocalizationsZhHans extends AppLocalizationsZh {
   String get add => '新增';
 
   @override
-  String get switchPlayer => '切换玩家';
-
-  @override
   String get daily => '每日';
 
   @override
@@ -459,9 +453,6 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
 
   @override
   String get add => '新增';
-
-  @override
-  String get switchPlayer => '切換玩家';
 
   @override
   String get daily => '每日';

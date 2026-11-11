@@ -3,8 +3,6 @@ import 'package:flutter/material.dart';
 /// 方塊配色（game board 與快照 mini 預覽共用）。
 Color tileColor(int value) {
   switch (value) {
-    case 0:
-      return Colors.grey[300]!;
     case 2:
       return Colors.grey[50]!;
     case 4:

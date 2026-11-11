@@ -346,12 +346,6 @@ abstract class AppLocalizations {
   /// **'Add'**
   String get add;
 
-  /// No description provided for @switchPlayer.
-  ///
-  /// In en, this message translates to:
-  /// **'Switch player'**
-  String get switchPlayer;
-
   /// No description provided for @daily.
   ///
   /// In en, this message translates to:

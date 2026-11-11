@@ -5,6 +5,31 @@
 新的完成紀錄加在最上面。
 
 ---
+## 2026-11-11 Code review 修正（read-only review 15 項 → 修 13、驳回了 2）
+
+第二輪 read-only review（報告未留檔，結論直接併入本檔）。**先記教訓**：review 用 `flutter test` 量到的「按鈕排溢出 184px／AppBar 標題溢出」是**假發現**——測試環境的字體是 Ahem（每個字元 14×14 方塊，比真機 Roboto 寬一倍），真機 Pixel 5 / Poco F5 實測不爆。排版類結論**只能用真機，或至少註明是測試字體測的**。
+
+- **Must fix（資料遺失／崩潰）**
+  - 玩家選單的「新增玩家」欄打**既有**名字 → `onAdd`（`addPlayer`）已同步把 `currentPlayer` 改掉，`_switchPlayer` 卻拿活值比對而 early-return → 畫面還是上一位的盤，下一手把 A 的棋盤寫進 `saved_game/B`（**B 的進度消失**）。實測重現：`saved_game/B` 被覆寫成 `ids 1,2 / score 11 / moves 4`。→ `_switchPlayer` 改與「開選單前的人」比對。
+  - `players.dart` 兩個對白框的 `TextEditingController` 在 `await showDialog` 後馬上 dispose，退場動畫期間 TextField 還在樹上 →「Who's playing?」輸入名字按 Save 就 `used after being disposed`（加級聯 layout/scheduler assertion，整個遊戲畫面消失）。→ 改 `StatefulWidget`，在 `dispose()` 釋放（比照 `snapshots.dart`）。
+  - 「You win!」／「Game Over!」**不是覆蓋層**：兩個 `Container(black54)` 是 body `Column` 的一列 → 沒蓋住棋盤、黑底出現在棋盤**下方**，還把 `Expanded` 的棋盤擠小。→ 搬到外層 `Stack` 的 `Positioned.fill`；雨個遮罩抽成 `_scrim()`（順帶去重复）。
+  - 切玩家沒等 `_pending` → 在飛的寫入會落到換好的人 namespace。→ `setCurrentPlayer` 前 `await _pending`。
+- **Should fix**
+  - 玩家選單不能捲（`Column` 直排 `ListTile`）→ 玩家一多「新增」那列被擠出對白框。→ 清單改 `Flexible + ListView(shrinkWrap)`。
+  - **Daily 局沿用「上次的格數」**（先開 8×8 再按 Daily → daily 變 8×8），家庭每日排行榜卻把不同格數的分數排在一起。→ daily 一律 4×4；回普通局時 `size` 改回 `settings.boardSize`。
+  - 玩家名沒長度上限（使用者自己敲）：`addPlayer` 統一 trim + 限長 20（`PrefsDefaults.playerNameLimit`）+ 大小寫去重（'Amy'/'amy' 不變成兩位玩家），並**回傳實際玩家名**給選單去 pop（否則呼叫端拿原始大小寫去 `setCurrentPlayer`，會切到不存在的 namespace）。
+  - CI 的 Codecov 那步永遠是空上傳（`flutter test` 沒 `--coverage` → `coverage/lcov.info` 根本不存在；action 預設 `fail_ci_if_error: false` 所以不会紅）。→ 加 `--coverage`。
+- **Nice to have**
+  - `history` 只進不出（8×8 長局記憶體線性成長）→ 上限 `_historyLimit = 200`，超過丢最老的；檢查點放在「這手成立」之後，被擋下的無效移動不會误删。
+  - 跨午夜還在玩 daily → 分數记在昨天的 `lastDailyDate`。→ `_afterMove` 比對 `dailySeedFor(now)` 與 `_seed`，不同則這局改算今天。
+  - 分享截圖的 3 張 `ui.Image` 沒 dispose（native 記憶體等 GC）→ 補 `.dispose()`。
+  - AppBar 標題整排 `FittedBox(scaleDown)` + 玩家名 `maxWidth 160` + ellipsis；Undo/Redo/New Game/Daily 那排包 `FittedBox(scaleDown)`；分數區包 `Expanded`。（排版三項的**真實**觸發條件是窄螢幕 + 系統字體放大，不是 review 講的「一定爆」。）
+  - 删死碼：l10n `switchPlayer`（4 個 arb + 產生檔，全案无人用）、`tileColor` 的 `case 0`。
+- **測試**（+7，共 26）：`switching player from the list…`（正當路徑 regression guard）、`typing an existing name in the Add field…`（查畫面分數 **和** `saved_game/B` 的 tile id）、`player dialogs do not use a disposed controller`、`win overlay covers the board without shrinking it`（比對 overlay 前後棋盤 rect + 遮罩是否蓋住棋盤中心）、`daily game is always 4x4…`（數背景格）、`player picker stays usable with many players`（15 位）、`layout survives a narrow phone with large system text`（320×640 + textScale 1.3 + 21 字玩家名，`takeException()` 必為 null）。
+  **驗收**：`git stash push -- lib/` 用**舊 lib + 新測試**跑 → 6 支新測試全紅；換回新 lib → 26/26 全綠；舊的 19 支一路都綠。
+- 驗收：`flutter analyze` No issues、`flutter test` 26/26。
+
+---
 ## 2026-11-10 Code review 修正（REVIEW.md 14 項，review 檔已併入本檔刪除）
 
 Read-only review（`REVIEW.md`，已刪）對 2026-11-10 功能 backlog commit（`a675834`）的 14 項發現：13 項全清、1 項半清（剩 class 合併，搬 TODO.md）。

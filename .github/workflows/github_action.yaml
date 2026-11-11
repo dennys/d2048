@@ -65,7 +65,8 @@ jobs:
 
       # 原本整個被註解掉：470 行的棋盘逻辑等於完全沒驗
       - name: Run tests
-        run: flutter test
+        # --coverage：下面 Codecov 那步要讀 coverage/lcov.info，沒這個參數它就是空上傳
+        run: flutter test --coverage
 
       # 只出 arm64，與 android/app/build.gradle.kts 的 abiFilters 一致；
       # 原本 build 的是通用 APK 還加 --verbose（Logs 巨大沒意義）

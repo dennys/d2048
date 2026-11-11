@@ -184,13 +184,27 @@ class GameStorage {
   }
 
   /// 新增玩家（已存在則只切換）並設為目前玩家。
-  Future<void> addPlayer(String name) async {
+  ///
+  /// 名字是使用者自己敲的：統一 trim + 限長（AppBar 標題與排行榜才不會被撐爆），
+  /// 並用大小寫不分的方式去重（'Amy' / 'amy' 不該變成兩位玩家）。
+  /// 回傳實際落地的玩家名（去空白、限長、與既有玩家大小寫去重後的結果）。
+  Future<String> addPlayer(String name) async {
+    final capped = String.fromCharCodes(name.trim().runes.take(PrefsDefaults.playerNameLimit));
+    if (capped.isEmpty) return currentPlayer; // 全空白 → 不建玩家，也不換人
     final players = loadPlayers();
-    if (!players.contains(name)) {
-      players.add(name);
+    var canonical = capped;
+    for (final p in players) {
+      if (p.toLowerCase() == capped.toLowerCase()) {
+        canonical = p; // 保留原 spelling，不另開一位
+        break;
+      }
+    }
+    if (!players.contains(canonical)) {
+      players.add(canonical);
       await _prefs.setString(Prefs.players, jsonEncode(players));
     }
-    await setCurrentPlayer(name);
+    await setCurrentPlayer(canonical);
+    return canonical;
   }
 
   Future<void> setCurrentPlayer(String name) async {
