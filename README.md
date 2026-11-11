@@ -1,5 +1,8 @@
 # d2048
 
+[![GitHub Actions](https://github.com/dennys/d2048/actions/workflows/github_action.yaml/badge.svg)](https://github.com/dennys/d2048/actions/workflows/github_action.yaml)
+[![codecov](https://codecov.io/gh/dennys/d2048/graph/badge.svg?token=AoyO8vBWZX)](https://codecov.io/gh/dennys/d2048)
+
 A 2048 puzzle game built with Flutter. Swipe to slide and merge tiles.
 
 ## Features
