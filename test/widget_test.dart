@@ -425,6 +425,41 @@ void main() {
     expect(prefs.containsKey(Prefs.stats), isFalse);
   });
 
+  test('empty current_player falls back to the first player', () async {
+    // players 還在、current_player 卻不見（被清掉／備份還原到一半）：修之前所有讀寫都落在
+    // `saved_game/`（尾巴一個 /）→ Amy 的舊資料永遠讀不到，AppBar 也只剩空白。
+    SharedPreferences.setMockInitialValues({
+      Prefs.players: jsonEncode(['Amy', 'Bob']),
+      '${Prefs.savedGame}/Amy': jsonEncode(SavedGame(
+        boardSize: 4,
+        tiles: [(id: 1, value: 2, row: 0, col: 0)],
+        score: 7,
+        moves: 2,
+        undoCount: 0,
+        keepPlaying: false,
+      ).toJson()),
+    });
+    final prefs = await SharedPreferences.getInstance();
+    final storage = GameStorage(prefs);
+    expect(storage.currentPlayer, 'Amy');
+    expect(storage.loadSavedGame(GameMode.normal)?.score, 7);
+
+    await storage.saveGame(
+      SavedGame(
+        boardSize: 4,
+        tiles: [(id: 1, value: 4, row: 0, col: 0)],
+        score: 9,
+        moves: 3,
+        undoCount: 0,
+        keepPlaying: false,
+      ),
+      GameMode.normal,
+      storage.currentPlayer,
+    );
+    expect(prefs.getString('${Prefs.savedGame}/Amy'), contains('"moves":3'));
+    expect(prefs.containsKey('${Prefs.savedGame}/'), isFalse); // 不能另開一個孤兒 key
+  });
+
   test('player data is namespaced per player', () async {
     SharedPreferences.setMockInitialValues({});
     final prefs = await SharedPreferences.getInstance();

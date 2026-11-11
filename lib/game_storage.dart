@@ -150,6 +150,10 @@ class GameStorage {
   GameStorage(this._prefs) {
     _migrateIfNeeded();
     currentPlayer = _prefs.getString(Prefs.currentPlayer) ?? '';
+    // players 非空、current_player 卻不見（被清掉／備份還原到一半）時，所有讀寫會落在
+    // `<base>/`（尾巴一個 /）→ 那位玩家的舊資料永遠讀不到，而且沒有任何提示。
+    final players = loadPlayers();
+    if (currentPlayer.isEmpty && players.isNotEmpty) currentPlayer = players.first;
   }
   final SharedPreferences _prefs;
   String currentPlayer = '';
