@@ -438,11 +438,17 @@ class _GameScreenState extends State<GameScreen> {
       seed: _seed,
     );
     final mode = this.mode;
-    _pending = _pending.then((_) async {
-      await storage.saveGame(game, mode);
-      await storage.saveStats(stats);
-      _notifySaveFailure();
-    });
+    // 鏈尾必須隔離例外：Dart 的 then 對「已失敗的 Future」跳回呼、原樣把錯傳下去，
+    // 所以鏈上只要拋一次，之後每一次 _persist() 的回呼都永不執行 —— 這次啟動就再也不自動
+    // 存檔，而且完全靜默。_notifySaveFailure() 要碰 context／ScaffoldMessenger，
+    // 不能讓它（或鏈上任何一支寫入）把整條鏈毒死。
+    _pending = _pending
+        .then((_) async {
+          await storage.saveGame(game, mode);
+          await storage.saveStats(stats);
+          _notifySaveFailure(); // 留在鏈內：它讀的是這一批寫入剛設好的 storage.lastError
+        })
+        .catchError((Object e) => debugPrint('d2048 persist step failed: $e'));
   }
 
   /// 寫入失敗只提示一次（同一場失敗不會每步都噴 SnackBar）；某次寫入成功後重設，

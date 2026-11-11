@@ -25,6 +25,23 @@ class _FailingStore extends InMemorySharedPreferencesStore {
   }
 }
 
+/// 只在**第一次**寫入丟例外的 store（記憶體快照照改 —— 真實失敗發生在落盤那一步）。
+/// 用它的測試要自己讓 `_write` 的 catch 裡丟一次例外，才能把例外送進 `_persist` 那條鏈。
+class _ThrowOnceStore extends InMemorySharedPreferencesStore {
+  _ThrowOnceStore(super.data) : super.withData();
+
+  int writeCalls = 0;
+
+  @override
+  Future<bool> setValue(String valueType, String key, Object value) async {
+    if (writeCalls++ == 0) {
+      await super.setValue(valueType, key, value);
+      throw PlatformException(code: 'no-space', message: 'disk full');
+    }
+    return super.setValue(valueType, key, value);
+  }
+}
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -743,6 +760,52 @@ void main() {
     expect(tester.takeException(), isNull);
     // 兩步都失敗 → 只提示一次
     expect(find.textContaining("Couldn't save"), findsOneWidget);
+  });
+
+  testWidgets('one throw inside the persist chain does not disable later saves', (tester) async {
+    // Dart 的 then 對已失敗的 Future 會跳回呼、原樣把錯傳下去：鏈上拋一次，之後每次
+    // _persist() 的回呼永不執行 —— 整個 session 不再自動存檔，而且靜默。
+    // 這裡讓第一次寫入失敗、且 _write 的 catch（debugPrint）再丟一次例外，
+    // 之後的滑動仍要落盤（修之前：store 永遠停在第一次的 moves）。
+    SharedPreferences.setMockInitialValues({});
+    final seedPrefs = await SharedPreferences.getInstance();
+    await seedPlayer(seedPrefs);
+    await seedBoard(seedPrefs, [
+      (id: 1, value: 2, row: 0, col: 0),
+      (id: 2, value: 4, row: 3, col: 3),
+    ]);
+    final seeded = await SharedPreferencesStorePlatform.instance.getAll();
+    final store = _ThrowOnceStore(seeded);
+    SharedPreferencesStorePlatform.instance = store;
+    SharedPreferences.resetStatic();
+    addTearDown(() {
+      SharedPreferencesStorePlatform.instance = InMemorySharedPreferencesStore.empty();
+      SharedPreferences.resetStatic();
+    });
+
+    final originalDebugPrint = debugPrint;
+    debugPrint = (String? message, {int? wrapWidth}) {
+      // 模擬「鏈上冒出一支例外」（今天 _write 吞了它，但 _notifySaveFailure 同在那條鏈上）。
+      if (message != null && message.startsWith('d2048 write ')) throw StateError('logger exploded');
+      originalDebugPrint(message, wrapWidth: wrapWidth);
+    };
+
+    final prefs = await SharedPreferences.getInstance();
+    final settings = await SettingsModel.load(prefs);
+    await tester.pumpWidget(Game2048App(settings: settings, prefs: prefs, random: Random(42)));
+    await tester.pumpAndSettle();
+
+    await swipe(tester, -200, 0); // 這一下的寫入失敗 + 鏈上拋例外
+    await tester.pumpAndSettle();
+    await swipe(tester, 0, -200); // 這一下必須照常落盤，不能因為鏈已毒死而被永久跳過
+    await tester.pumpAndSettle();
+    debugPrint = originalDebugPrint; // binding 會查 foundation vars，要在 test body 內交回
+
+    expect(find.textContaining('Moves: 2'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    final stored = jsonDecode((await store.getAll())['flutter.saved_game/Player']! as String);
+    expect(stored['moves'], 2); // 毒死時會停在第一次那筆（1）
+    expect(store.writeCalls, greaterThan(2));
   });
 
   testWidgets('layout survives a narrow phone with large system text', (tester) async {
