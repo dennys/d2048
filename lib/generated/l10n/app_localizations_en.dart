@@ -163,4 +163,8 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get shareScreenshot => 'Share screenshot';
+
+  @override
+  String get saveFailed =>
+      'Couldn\'t save your game (out of storage?). This round may not be kept.';
 }

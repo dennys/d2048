@@ -63,5 +63,6 @@
   "noScores": "No scores yet",
   "share": "Share",
   "shareText": "Share text",
-  "shareScreenshot": "Share screenshot"
+  "shareScreenshot": "Share screenshot",
+  "saveFailed": "Couldn't save your game (out of storage?). This round may not be kept."
 }

@@ -50,6 +50,10 @@ dev_dependencies:
   # rules and activating additional ones.
   flutter_lints: ^6.0.0
 
+  # 只有 test/ 用：模擬寫入失敗（替換 SharedPreferencesStorePlatform.instance）。
+  # 原本是 shared_preferences 的 transitive，version 跟 pubspec.lock 對齊（2.4.2）。
+  shared_preferences_platform_interface: ^2.4.2
+
 # Linux/aarch64 主機（dgx1）：Google 不發 linux-aarch64 主機的 NDK/cmake（x86-64 版執行會報
 # `Syntax error: ")" unexpected`）。2.5.x 改走 jni/jni_flutter → 觸發 CMake 原生編譯 → 必敗。
 # 釘在「無 KGP（AGP 9 built-in Kotlin 相容）且無 jni」的最後版本。

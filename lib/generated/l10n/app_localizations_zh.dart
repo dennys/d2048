@@ -162,6 +162,9 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get shareScreenshot => '分享截圖';
+
+  @override
+  String get saveFailed => '儲存失敗（儲存空間不足？）：這一局可能不會被存起來';
 }
 
 /// The translations for Chinese, using the Han script (`zh_Hans`).
@@ -321,6 +324,9 @@ class AppLocalizationsZhHans extends AppLocalizationsZh {
 
   @override
   String get shareScreenshot => '分享截图';
+
+  @override
+  String get saveFailed => '储存失败（存储空间不足？）：这一局可能不会被保存';
 }
 
 /// The translations for Chinese, using the Han script (`zh_Hant`).
@@ -480,4 +486,7 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
 
   @override
   String get shareScreenshot => '分享截圖';
+
+  @override
+  String get saveFailed => '儲存失敗（儲存空間不足？）：這一局可能不會被存起來';
 }

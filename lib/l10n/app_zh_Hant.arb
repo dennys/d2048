@@ -49,5 +49,6 @@
   "noScores": "還沒有分數",
   "share": "分享",
   "shareText": "分享文字",
-  "shareScreenshot": "分享截圖"
+  "shareScreenshot": "分享截圖",
+  "saveFailed": "儲存失敗（儲存空間不足？）：這一局可能不會被存起來"
 }

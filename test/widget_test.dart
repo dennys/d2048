@@ -7,7 +7,23 @@ import 'package:d2048/settings_keys.dart';
 import 'package:d2048/settings_model.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:shared_preferences_platform_interface/shared_preferences_platform_interface.dart';
+
+/// 寫入一律丟 exception 的 store（讀取照常）→ 模擬空間不足／落盤失敗。
+/// 注意失敗发生在 `SharedPreferences` 已經改完記憶體快取**之後**，所以遊戲照玩。
+class _FailingStore extends InMemorySharedPreferencesStore {
+  _FailingStore(super.data) : super.withData();
+
+  int writeCalls = 0;
+
+  @override
+  Future<bool> setValue(String valueType, String key, Object value) async {
+    writeCalls++;
+    throw PlatformException(code: 'no-space', message: 'disk full');
+  }
+}
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -687,6 +703,46 @@ void main() {
 
     expect(tester.takeException(), isNull);
     expect(find.widgetWithText(ElevatedButton, 'Add'), findsOneWidget); // 「新增」那列還在
+  });
+
+  testWidgets('a failing save warns once and the game keeps playing', (tester) async {
+    // SharedPreferences 是先改記憶體快取、再非同步落盤 → 落盤失敗時遊戲要能繼續玩，
+    // 但必須讓使用者知道「這一局可能不會被存起來」（而且同一場失敗只噴一次）。
+    SharedPreferences.setMockInitialValues({});
+    final seedPrefs = await SharedPreferences.getInstance();
+    await seedPlayer(seedPrefs);
+    await seedBoard(seedPrefs, [
+      (id: 1, value: 2, row: 0, col: 0),
+      (id: 2, value: 4, row: 3, col: 3),
+    ]);
+    final seeded = await SharedPreferencesStorePlatform.instance.getAll();
+    final store = _FailingStore(seeded);
+    SharedPreferencesStorePlatform.instance = store;
+    SharedPreferences.resetStatic();
+    addTearDown(() {
+      SharedPreferencesStorePlatform.instance = InMemorySharedPreferencesStore.empty();
+      SharedPreferences.resetStatic();
+    });
+
+    final prefs = await SharedPreferences.getInstance();
+    final settings = await SettingsModel.load(prefs);
+    await tester.pumpWidget(Game2048App(settings: settings, prefs: prefs, random: Random(42)));
+    await tester.pumpAndSettle();
+
+    await swipe(tester, -200, 0);
+    await tester.pumpAndSettle();
+    await swipe(tester, 0, -200);
+    await tester.pumpAndSettle();
+
+    // 失敗了：寫入-call 有發生，但 store 裡仍是 seed 時那份（0 步）——真的沒落盤。
+    expect(store.writeCalls, greaterThan(0));
+    final stored = jsonDecode((await store.getAll())['flutter.saved_game/Player']! as String);
+    expect(stored['moves'], 0);
+    // 但遊戲照玩（失敗發生在改完記憶體快取之後）：UI 已經走到第 2 步、沒崩
+    expect(find.textContaining('Moves: 2'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    // 兩步都失敗 → 只提示一次
+    expect(find.textContaining("Couldn't save"), findsOneWidget);
   });
 
   testWidgets('layout survives a narrow phone with large system text', (tester) async {

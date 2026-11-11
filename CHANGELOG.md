@@ -30,6 +30,15 @@
 - 驗收：`flutter analyze` No issues、`flutter test` 26/26。
 
 ---
+### 同日跟進：SharedPreferences 寫入失敗不再靜默
+
+- `GameStorage` 原本 **4 份一模一樣的 `try/catch + debugPrint`**，外加 **3 個完全沒包 try 的裸寫入**（遷移、`players` 清單、`current_player`）——那三個异常會直接往上抛（例如 `_askPlayerName` 裡 `await storage.addPlayer` 炸掉）。→ 收敲成單一把 `_write(key, value)`，全案唯一的寫入入口，失敗記錄到 `GameStorage.lastError` + log，不往上抛（一個小遊戲不該因為存檔失敗而崩）。
+- UI：`_persist` 的寫入鏈尾結尾呼叫 `_notifySaveFailure()`，失敗時 `ScaffoldMessenger` 提示一次（`_warnedSaveFailure` 旗標 → 同一場失敗不每步都噴；某次寫入成功會重設）。文案走 l10n：`saveFailed`（4 個 arb + 重跑 `flutter gen-l10n`）。
+- **不做重試佇列**：`_persist` 每一步都把整份狀態重寫一次，下一手的成功寫入自然把失敗那次補回來；真正會丢進度的只有「一直失敗 + app 被殺」，所以比例當中的修法就是**告訴使用者**。（也不做：另存檔案備援／throw／每步彈 dialog／進背景 flush——`apply()` 本来就非同步落盤，Flutter 也沒有立刻落盤的 API。）
+- **可測**：`_FailingStore extends InMemorySharedPreferencesStore` 只 override `setValue`（這個版本的介面是單一把 `setValue(valueType, key, value)`，`setString` 不是可 override 的方法）丟 `PlatformException`。測到三件事：store 裡仍是 seed 那份（`moves == 0`，真的没落盤）、UI 已經走到 `Moves: 2`（失敗發生在 `SharedPreferences` 改完記憶體快取**之後**，所以遊戲照玩）、雨步失敗只噴一颗 SnackBar。→ 新增 dev_dependency `shared_preferences_platform_interface: ^2.4.2`（test 用，版號跟 `pubspec.lock` 對齊；`setMockInitialValues` 用的是記憶體 store、永遠不會失敗，所以不能用它測這條）。
+- 驗收：`flutter analyze` No issues、`flutter test` 27/27（拿掉 SnackBar 那行會讓新測試紅，驗過）、`flutter build apk --debug --target-platform android-arm64` OK。
+
+---
 ## 2026-11-10 Code review 修正（REVIEW.md 14 項，review 檔已併入本檔刪除）
 
 Read-only review（`REVIEW.md`，已刪）對 2026-11-10 功能 backlog commit（`a675834`）的 14 項發現：13 項全清、1 項半清（剩 class 合併，搬 TODO.md）。

@@ -49,5 +49,6 @@
   "noScores": "还没有分数",
   "share": "分享",
   "shareText": "分享文字",
-  "shareScreenshot": "分享截图"
+  "shareScreenshot": "分享截图",
+  "saveFailed": "储存失败（存储空间不足？）：这一局可能不会被保存"
 }

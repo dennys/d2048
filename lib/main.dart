@@ -425,6 +425,7 @@ class _GameScreenState extends State<GameScreen> {
 
   /// 自動存檔 + 統計：串接寫入（依序落盤，避免並發覆蓋）；每次狀態變更後呼叫。
   Future<void> _pending = Future.value();
+  bool _warnedSaveFailure = false;
 
   void _persist() {
     final game = SavedGame(
@@ -440,7 +441,24 @@ class _GameScreenState extends State<GameScreen> {
     _pending = _pending.then((_) async {
       await storage.saveGame(game, mode);
       await storage.saveStats(stats);
+      _notifySaveFailure();
     });
+  }
+
+  /// 寫入失敗只提示一次（同一場失敗不會每步都噴 SnackBar）；某次寫入成功後重設，
+  /// 下次再壞會再提示。不重試也不崩：見 GameStorage.lastError 的說明。
+  void _notifySaveFailure() {
+    if (storage.lastError == null) {
+      _warnedSaveFailure = false;
+      return;
+    }
+    if (_warnedSaveFailure || !mounted) return;
+    _warnedSaveFailure = true;
+    final l = AppLocalizations.of(context);
+    if (l == null) return;
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(l.saveFailed)));
   }
 
   /// 目前 board 的 TileData（不含已移除的合併殘骸）。

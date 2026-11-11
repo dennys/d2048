@@ -399,6 +399,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Share screenshot'**
   String get shareScreenshot;
+
+  /// No description provided for @saveFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t save your game (out of storage?). This round may not be kept.'**
+  String get saveFailed;
 }
 
 class _AppLocalizationsDelegate

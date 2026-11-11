@@ -154,6 +154,25 @@ class GameStorage {
   final SharedPreferences _prefs;
   String currentPlayer = '';
 
+  /// 最近一次寫入失敗的原因（null = 正常）。
+  ///
+  /// SharedPreferences 是先同步改記憶體快取、再非同步落盤，所以寫入失敗時遊戲照玩、
+  /// 讀得到的還是新值；只有「一直失敗 + app 被殺」才會真的丢進度。也因此**不做重試
+  /// 佇列**：`GameScreen._persist` 每一步都重寫整份狀態，下一次成功寫入自然補回來。
+  /// UI 端（`GameScreen._notifySaveFailure`）拿這個欄位提示一次。
+  String? lastError;
+
+  /// 全案唯一的寫入入口：失敗只記錄 + log，不往上抛（一個小遊戲不該因存檔失敗而崩）。
+  Future<void> _write(String key, String value) async {
+    try {
+      await _prefs.setString(key, value);
+      lastError = null;
+    } catch (e) {
+      lastError = '$e';
+      debugPrint('d2048 write $key failed: $e');
+    }
+  }
+
   /// 舊版（無 per-player）全域資料搬進預設玩家，只跑一次。
   void _migrateIfNeeded() {
     if (_prefs.containsKey(Prefs.players)) return;
@@ -164,13 +183,13 @@ class GameStorage {
       for (final k in oldKeys) {
         final raw = _prefs.getString(k);
         if (raw != null) {
-          _prefs.setString('$k/${PrefsDefaults.defaultPlayer}', raw);
+          _write('$k/${PrefsDefaults.defaultPlayer}', raw);
           _prefs.remove(k);
         }
       }
     }
-    _prefs.setString(Prefs.players, jsonEncode(players));
-    if (players.isNotEmpty) _prefs.setString(Prefs.currentPlayer, players.first);
+    _write(Prefs.players, jsonEncode(players));
+    if (players.isNotEmpty) _write(Prefs.currentPlayer, players.first);
   }
 
   List<String> loadPlayers() {
@@ -201,7 +220,7 @@ class GameStorage {
     }
     if (!players.contains(canonical)) {
       players.add(canonical);
-      await _prefs.setString(Prefs.players, jsonEncode(players));
+      await _write(Prefs.players, jsonEncode(players));
     }
     await setCurrentPlayer(canonical);
     return canonical;
@@ -209,7 +228,7 @@ class GameStorage {
 
   Future<void> setCurrentPlayer(String name) async {
     currentPlayer = name;
-    await _prefs.setString(Prefs.currentPlayer, name);
+    await _write(Prefs.currentPlayer, name);
   }
 
   String _key(String base, [String? player]) => '$base/${player ?? currentPlayer}';
@@ -226,11 +245,7 @@ class GameStorage {
   }
 
   Future<void> saveGame(SavedGame game, GameMode mode) async {
-    try {
-      await _prefs.setString(_key(mode == GameMode.daily ? Prefs.savedGameDaily : Prefs.savedGame), jsonEncode(game.toJson()));
-    } catch (e) {
-      debugPrint('d2048 saveGame failed: $e');
-    }
+    await _write(_key(mode == GameMode.daily ? Prefs.savedGameDaily : Prefs.savedGame), jsonEncode(game.toJson()));
   }
 
   List<BoardSnapshot> loadSnapshots() {
@@ -256,11 +271,7 @@ class GameStorage {
   }
 
   Future<void> saveSnapshots(List<BoardSnapshot> list) async {
-    try {
-      await _prefs.setString(_key(Prefs.snapshots), jsonEncode([for (final s in list) s.toJson()]));
-    } catch (e) {
-      debugPrint('d2048 saveSnapshots failed: $e');
-    }
+    await _write(_key(Prefs.snapshots), jsonEncode([for (final s in list) s.toJson()]));
   }
 
   int bestScore(int size) => bestScoreFor(currentPlayer, size);
@@ -289,11 +300,7 @@ class GameStorage {
       }
     }
     map[size.toString()] = score;
-    try {
-      await _prefs.setString(key, jsonEncode(map));
-    } catch (e) {
-      debugPrint('d2048 setBestScore failed: $e');
-    }
+    await _write(key, jsonEncode(map));
   }
 
   GameStats loadStats() => loadStatsFor(currentPlayer);
@@ -309,10 +316,6 @@ class GameStorage {
   }
 
   Future<void> saveStats(GameStats stats) async {
-    try {
-      await _prefs.setString(_key(Prefs.stats), jsonEncode(stats.toJson()));
-    } catch (e) {
-      debugPrint('d2048 saveStats failed: $e');
-    }
+    await _write(_key(Prefs.stats), jsonEncode(stats.toJson()));
   }
 }
