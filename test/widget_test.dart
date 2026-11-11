@@ -892,6 +892,25 @@ void main() {
     expect(cells, findsNWidgets(16)); // 沿用 8×8 就會变 64，家庭每日排行就不可比
   });
 
+  testWidgets('a broken players list still opens a game and warns with nothing to resume', (tester) async {
+    // 另一支 corrupt 測試 seed 了一份存檔（走 _restoreSaved、不會自動存檔），它守的是
+    // initState 那句 post-frame 提示；這支是「沒存檔可接續」的變體：開新局也要（1）不進
+    // 「誰在玩」（2）照常開局（3）仍提示。兩支互補：拆掉 initState 的提示只有 seed 那支紅。
+    SharedPreferences.setMockInitialValues({
+      Prefs.players: '{this is not a list',
+      Prefs.currentPlayer: 'Amy',
+    });
+    final prefs = await SharedPreferences.getInstance();
+    final settings = await SettingsModel.load(prefs);
+    await tester.pumpWidget(Game2048App(settings: settings, prefs: prefs, random: Random(1)));
+    await tester.pumpAndSettle();
+
+    expect(find.text("Who's playing?"), findsNothing);
+    expect(find.byType(AnimatedPositioned), findsNWidgets(2)); // 照常開了新局（不是停在空白頁）
+    expect(find.textContaining("Couldn't read the player list"), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('Play Again after a daily game over goes back to the normal board size', (tester) async {
     // 遮罩的 Play Again 之前直接 setState(_initializeGame)：mode 預設 normal、size 沿用
     // daily 的 4 → 原本玩 8×8 的人破局後拿到一局普通的 4×4，最高分也改成看 4×4 那欄。
