@@ -1,4 +1,6 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Telegram 家庭排行榜需要網路（release 版也要有，debug/profile 的 manifest 原本就有）。 -->
+    <uses-permission android:name="android.permission.INTERNET"/>
     <application
         android:label="d2048"
         android:name="${applicationName}"

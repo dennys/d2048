@@ -5,6 +5,17 @@
 新的完成紀錄加在最上面。
 
 ---
+## Telegram 家庭排行榜（TODO.md E）
+
+- 新增 `lib/telegram_service.dart`：讀取公開頻道 `t.me/s/<頻道>` 的每日分數（匿名、免 token），以 Bot API `sendMessage` 送出分數（需設定 bot token，bot 須為頻道管理員）。
+- 分數訊息格式 `d2048 daily <yyyyMMdd> <名字> <分數>`；日期取自訊息內容（送出者的本地日期），避開 UTC 與本地午夜不一致的問題。
+- 每日排行榜會合併本機與頻道的今日分數；網路失敗時退回快取。
+- 設定頁新增 Telegram 區塊（頻道、token、測試連線）；未設 token 時改用系統分享面板傳送分數。
+- 偏離 TODO.md 的決定：HTTP 用 `dart:io` `HttpClient`（不加 `http` 套件）；無 token 模式用 `share_plus` 而非 `t.me/share/url` 深連結（不加 `url_launcher`）。
+- Android 加 `INTERNET` 權限（release 必要）。
+- 驗收：`flutter analyze` No issues、`flutter test` 45/45。未驗證：真實 Telegram Bot API 送出、真機 release 行為。
+
+---
 ## 2026-11-11 Code review 修正（read-only review 15 項 → 修 13、驳回了 2）
 
 第二輪 read-only review（報告未留檔，結論直接併入本檔）。**先記教訓**：review 用 `flutter test` 量到的「按鈕排溢出 184px／AppBar 標題溢出」是**假發現**——測試環境的字體是 Ahem（每個字元 14×14 方塊，比真機 Roboto 寬一倍），真機 Pixel 5 / Poco F5 實測不爆。排版類結論**只能用真機，或至少註明是測試字體測的**。

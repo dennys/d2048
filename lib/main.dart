@@ -13,6 +13,7 @@ import 'game_storage.dart';
 import 'generated/l10n/app_localizations.dart';
 import 'settings_keys.dart';
 import 'settings_model.dart';
+import 'telegram_service.dart';
 import 'tile_style.dart';
 import 'widgets/leaderboards.dart';
 import 'widgets/players.dart';
@@ -517,17 +518,36 @@ class _GameScreenState extends State<GameScreen> {
     }
   }
 
-  /// 家庭每日排行榜。
+  /// 家庭每日排行榜：本機玩家 ＋ 頻道上的今日分數（抓不到就用快取，永不彈錯誤）。
   Future<void> _showDailyLeaderboard() async {
-    final rows = [
+    final seed = dailySeedFor(DateTime.now());
+    final local = [
       for (final p in storage.loadPlayers()) (p, storage.loadStatsFor(p)),
     ];
+    final remote = await _fetchTelegramScores();
+    if (!mounted) return;
     await showDialog<void>(
       context: context,
-      builder: (dialogContext) =>
-          DailyLeaderboardDialog(rows: rows, todaySeed: dailySeedFor(DateTime.now())),
+      builder: (dialogContext) => DailyLeaderboardDialog(
+        rows: TelegramService.mergeDailyRows(local: local, remote: remote, seed: seed),
+        todaySeed: seed,
+      ),
     );
   }
+
+  /// 讀頻道分數；成功就寫快取，失敗回傳上次快取（未設定頻道則為空）。
+  Future<List<TelegramScore>> _fetchTelegramScores() async {
+    final channel = widget.settings.telegramChannel;
+    if (channel.isEmpty) return const [];
+    try {
+      final scores = await TelegramService.fetchScores(channel);
+      await TelegramService.writeCache(widget.prefs, channel, scores);
+      return scores;
+    } on TelegramException {
+      return TelegramService.readCache(widget.prefs, channel);
+    }
+  }
+
 
   /// 本地排行榜（每格數 top N，跨玩家）。
   Future<void> _showLeaderboard() async {
@@ -559,6 +579,11 @@ class _GameScreenState extends State<GameScreen> {
               onPressed: () => Navigator.pop(dialogContext, 'image'),
               child: Text(l.shareScreenshot),
             ),
+            if (widget.settings.telegramChannel.isNotEmpty)
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext, 'telegram'),
+                child: Text(l.sendToTelegram),
+              ),
           ],
         ),
       ),
@@ -567,8 +592,45 @@ class _GameScreenState extends State<GameScreen> {
       await _shareText();
     } else if (choice == 'image') {
       await _shareScreenshot();
+    } else if (choice == 'telegram') {
+      await _sendToTelegram();
     }
   }
+
+  /// 把今日 daily 最高分送到家庭頻道。有 token → bot 直接發；沒有 → 叫出分享選單，由使用者選頻道發。
+  Future<void> _sendToTelegram() async {
+    final l = AppLocalizations.of(context)!;
+    final messenger = ScaffoldMessenger.of(context);
+    final seed = dailySeedFor(DateTime.now());
+    if (stats.lastDailyDate != seed || stats.dailyBest <= 0) {
+      messenger
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(content: Text(l.telegramNotPlayedToday)));
+      return;
+    }
+    final channel = widget.settings.telegramChannel;
+    final token = widget.settings.telegramToken;
+    final text = TelegramService.scoreMessage(
+      seed: seed,
+      player: storage.currentPlayer,
+      score: stats.dailyBest,
+    );
+    try {
+      if (token.isEmpty) {
+        await SharePlus.instance.share(ShareParams(text: text));
+      } else {
+        await TelegramService.sendMessage(token: token, channel: channel, text: text);
+        messenger
+          ..hideCurrentSnackBar()
+          ..showSnackBar(SnackBar(content: Text(l.telegramSent)));
+      }
+    } on TelegramException catch (e) {
+      messenger
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(content: Text('${l.telegramSendFailed}: $e')));
+    }
+  }
+
 
   Future<void> _shareText() async {
     final l = AppLocalizations.of(context)!;

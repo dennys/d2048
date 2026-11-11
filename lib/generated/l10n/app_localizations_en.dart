@@ -171,4 +171,42 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get dataBroken =>
       'Couldn\'t read the player list (saved data is damaged). Nothing was overwritten.';
+
+  @override
+  String get telegramSection => 'Telegram family leaderboard';
+
+  @override
+  String get telegramChannel => 'Channel (@username)';
+
+  @override
+  String get telegramToken => 'Bot token (optional)';
+
+  @override
+  String get telegramHelp =>
+      'The channel must be public. Leave the token empty to send scores via the share sheet.';
+
+  @override
+  String get telegramTest => 'Test';
+
+  @override
+  String get telegramTestOk => 'Connection OK';
+
+  @override
+  String get telegramTestFail => 'Connection failed';
+
+  @override
+  String get telegramInvalidChannel =>
+      'Invalid channel name (5+ letters, digits or _, starting with a letter)';
+
+  @override
+  String get sendToTelegram => 'Send to Telegram';
+
+  @override
+  String get telegramSent => 'Sent to Telegram';
+
+  @override
+  String get telegramNotPlayedToday => 'Play today\'s daily game first';
+
+  @override
+  String get telegramSendFailed => 'Couldn\'t send to Telegram';
 }

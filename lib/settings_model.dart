@@ -23,17 +23,23 @@ class SettingsModel extends ChangeNotifier {
   String _theme = PrefsDefaults.theme;
   int _boardSize = PrefsDefaults.boardSize;
   bool _haptics = PrefsDefaults.haptics;
+  String _telegramChannel = PrefsDefaults.telegramChannel;
+  String _telegramToken = PrefsDefaults.telegramToken;
 
   String get language => _language;
   String get theme => _theme;
   int get boardSize => _boardSize;
   bool get haptics => _haptics;
+  String get telegramChannel => _telegramChannel;
+  String get telegramToken => _telegramToken;
 
   Future<void> _loadPreferences() async {
     _language = _prefs.getString(Prefs.language) ?? PrefsDefaults.language;
     _theme = _prefs.getString(Prefs.theme) ?? PrefsDefaults.theme;
     _boardSize = _clampSize(_prefs.getInt(Prefs.boardSize));
     _haptics = _prefs.getBool(Prefs.haptics) ?? PrefsDefaults.haptics;
+    _telegramChannel = _prefs.getString(Prefs.telegramChannel) ?? PrefsDefaults.telegramChannel;
+    _telegramToken = _prefs.getString(Prefs.telegramToken) ?? PrefsDefaults.telegramToken;
   }
 
   int _clampSize(int? value) {
@@ -62,6 +68,19 @@ class SettingsModel extends ChangeNotifier {
   Future<void> setHaptics(bool haptics) async {
     _haptics = haptics;
     await _prefs.setBool(Prefs.haptics, haptics);
+    notifyListeners();
+  }
+
+  /// [channel] 須已通過 `TelegramService.normalizeChannel`；空字串 = 關閉 Telegram。
+  Future<void> setTelegramChannel(String channel) async {
+    _telegramChannel = channel;
+    await _prefs.setString(Prefs.telegramChannel, channel);
+    notifyListeners();
+  }
+
+  Future<void> setTelegramToken(String token) async {
+    _telegramToken = token;
+    await _prefs.setString(Prefs.telegramToken, token);
     notifyListeners();
   }
 

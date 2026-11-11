@@ -7,6 +7,11 @@ class Prefs {
   static const boardSize = 'board_size';
   static const haptics = 'haptics';
 
+  // Telegram 家庭排行榜（token 明碼存 prefs，見 TODO.md E「必守的三條」）
+  static const telegramChannel = 'telegram_channel';
+  static const telegramToken = 'telegram_token';
+  static const telegramCache = 'telegram_cache';
+
   // 遊戲資料（GameStorage 用）；遊戲資料 key 一律 `<base>/<player>` namespace
   static const savedGame = 'saved_game';
   static const savedGameDaily = 'saved_game_daily';
@@ -32,6 +37,10 @@ class PrefsDefaults {
 
   /// 合併震動，預設關。
   static const haptics = false;
+
+  /// Telegram 頻道（不含 @）與 bot token；留空 = 未設定。
+  static const telegramChannel = '';
+  static const telegramToken = '';
 
   /// 快照上限：滿了擋下新存檔。
   static const snapshotLimit = 50;

@@ -51,5 +51,17 @@
   "shareText": "分享文字",
   "shareScreenshot": "分享截图",
   "saveFailed": "储存失败（存储空间不足？）：这一局可能不会被保存",
-  "dataBroken": "读不到玩家清单（储存资料损毁）：已保留原始资料，不会覆写"
+  "dataBroken": "读不到玩家清单（储存资料损毁）：已保留原始资料，不会覆写",
+  "telegramSection": "Telegram 家庭排行榜",
+  "telegramChannel": "频道（@用户名）",
+  "telegramToken": "Bot token（选填）",
+  "telegramHelp": "频道需为公开频道。Token 留空则用分享菜单发送分数。",
+  "telegramTest": "测试",
+  "telegramTestOk": "连接正常",
+  "telegramTestFail": "连接失败",
+  "telegramInvalidChannel": "频道名称格式错误（5 个以上英数或下划线，且以英文字母开头）",
+  "sendToTelegram": "发送到 Telegram",
+  "telegramSent": "已发送到 Telegram",
+  "telegramNotPlayedToday": "请先玩今天的每日挑战",
+  "telegramSendFailed": "发送到 Telegram 失败"
 }

@@ -1191,7 +1191,12 @@ void main() {
     await tester.tap(find.byIcon(Icons.settings_outlined));
     await tester.pumpAndSettle();
     expect(find.text('Settings'), findsWidgets);
+    // Telegram 區塊在 stats 上方，stats 要先捲到可見範圍。
+    await tester.scrollUntilVisible(find.text('Games played'), 200, scrollable: find.byType(Scrollable).first);
     expect(find.text('Games played'), findsOneWidget); // stats 那一區也要真的渲染
+    // ListView 是 lazy 建構，捲走後語言／主題 dropdown 會被卸載，先捲回頂部。
+    await tester.fling(find.byType(ListView).first, const Offset(0, 3000), 3000);
+    await tester.pumpAndSettle();
 
     // 語言：選繁體中文 → SettingsModel 舆整個 app 的 locale 都跟過去
     await tester.tap(find.byType(DropdownButton<String>).first);
@@ -1201,7 +1206,10 @@ void main() {
     expect(settings.language, 'zh_Hant');
     expect(tester.widget<MaterialApp>(find.byType(MaterialApp)).locale,
         const Locale.fromSubtags(languageCode: 'zh', scriptCode: 'Hant'));
+    await tester.scrollUntilVisible(find.text('局數'), 200, scrollable: find.byType(Scrollable).first);
     expect(find.text('局數'), findsOneWidget);
+    await tester.fling(find.byType(ListView).first, const Offset(0, 3000), 3000);
+    await tester.pumpAndSettle();
 
     // 主題：深色
     await tester.tap(find.byType(DropdownButton<String>).last);
@@ -1218,8 +1226,7 @@ void main() {
     expect(settings.haptics, isTrue);
 
     // 統計那區在 ListView 下方：捲下去看它真的把數字畫出來
-    await tester.drag(find.byType(ListView), const Offset(0, -300));
-    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(find.text('總合併數'), 200, scrollable: find.byType(Scrollable).first);
     expect(find.text('總合併數'), findsOneWidget);
     expect(find.text('64'), findsOneWidget);
     expect(find.text('9'), findsOneWidget);

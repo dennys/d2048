@@ -411,6 +411,78 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Couldn\'t read the player list (saved data is damaged). Nothing was overwritten.'**
   String get dataBroken;
+
+  /// No description provided for @telegramSection.
+  ///
+  /// In en, this message translates to:
+  /// **'Telegram family leaderboard'**
+  String get telegramSection;
+
+  /// No description provided for @telegramChannel.
+  ///
+  /// In en, this message translates to:
+  /// **'Channel (@username)'**
+  String get telegramChannel;
+
+  /// No description provided for @telegramToken.
+  ///
+  /// In en, this message translates to:
+  /// **'Bot token (optional)'**
+  String get telegramToken;
+
+  /// No description provided for @telegramHelp.
+  ///
+  /// In en, this message translates to:
+  /// **'The channel must be public. Leave the token empty to send scores via the share sheet.'**
+  String get telegramHelp;
+
+  /// No description provided for @telegramTest.
+  ///
+  /// In en, this message translates to:
+  /// **'Test'**
+  String get telegramTest;
+
+  /// No description provided for @telegramTestOk.
+  ///
+  /// In en, this message translates to:
+  /// **'Connection OK'**
+  String get telegramTestOk;
+
+  /// No description provided for @telegramTestFail.
+  ///
+  /// In en, this message translates to:
+  /// **'Connection failed'**
+  String get telegramTestFail;
+
+  /// No description provided for @telegramInvalidChannel.
+  ///
+  /// In en, this message translates to:
+  /// **'Invalid channel name (5+ letters, digits or _, starting with a letter)'**
+  String get telegramInvalidChannel;
+
+  /// No description provided for @sendToTelegram.
+  ///
+  /// In en, this message translates to:
+  /// **'Send to Telegram'**
+  String get sendToTelegram;
+
+  /// No description provided for @telegramSent.
+  ///
+  /// In en, this message translates to:
+  /// **'Sent to Telegram'**
+  String get telegramSent;
+
+  /// No description provided for @telegramNotPlayedToday.
+  ///
+  /// In en, this message translates to:
+  /// **'Play today\'s daily game first'**
+  String get telegramNotPlayedToday;
+
+  /// No description provided for @telegramSendFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t send to Telegram'**
+  String get telegramSendFailed;
 }
 
 class _AppLocalizationsDelegate

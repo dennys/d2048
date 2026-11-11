@@ -168,6 +168,42 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get dataBroken => '讀不到玩家清單（儲存資料損毀）：已保留原始資料，不會覆寫';
+
+  @override
+  String get telegramSection => 'Telegram 家庭排行榜';
+
+  @override
+  String get telegramChannel => '頻道（@使用者名稱）';
+
+  @override
+  String get telegramToken => 'Bot token（選填）';
+
+  @override
+  String get telegramHelp => '頻道需為公開頻道。Token 留空則用分享選單送出分數。';
+
+  @override
+  String get telegramTest => '測試';
+
+  @override
+  String get telegramTestOk => '連線正常';
+
+  @override
+  String get telegramTestFail => '連線失敗';
+
+  @override
+  String get telegramInvalidChannel => '頻道名稱格式錯誤（5 個以上英數或底線，且以英文字母開頭）';
+
+  @override
+  String get sendToTelegram => '送到 Telegram';
+
+  @override
+  String get telegramSent => '已送到 Telegram';
+
+  @override
+  String get telegramNotPlayedToday => '請先玩今天的每日挑戰';
+
+  @override
+  String get telegramSendFailed => '送到 Telegram 失敗';
 }
 
 /// The translations for Chinese, using the Han script (`zh_Hans`).
@@ -333,6 +369,42 @@ class AppLocalizationsZhHans extends AppLocalizationsZh {
 
   @override
   String get dataBroken => '读不到玩家清单（储存资料损毁）：已保留原始资料，不会覆写';
+
+  @override
+  String get telegramSection => 'Telegram 家庭排行榜';
+
+  @override
+  String get telegramChannel => '频道（@用户名）';
+
+  @override
+  String get telegramToken => 'Bot token（选填）';
+
+  @override
+  String get telegramHelp => '频道需为公开频道。Token 留空则用分享菜单发送分数。';
+
+  @override
+  String get telegramTest => '测试';
+
+  @override
+  String get telegramTestOk => '连接正常';
+
+  @override
+  String get telegramTestFail => '连接失败';
+
+  @override
+  String get telegramInvalidChannel => '频道名称格式错误（5 个以上英数或下划线，且以英文字母开头）';
+
+  @override
+  String get sendToTelegram => '发送到 Telegram';
+
+  @override
+  String get telegramSent => '已发送到 Telegram';
+
+  @override
+  String get telegramNotPlayedToday => '请先玩今天的每日挑战';
+
+  @override
+  String get telegramSendFailed => '发送到 Telegram 失败';
 }
 
 /// The translations for Chinese, using the Han script (`zh_Hant`).
@@ -498,4 +570,40 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
 
   @override
   String get dataBroken => '讀不到玩家清單（儲存資料損毀）：已保留原始資料，不會覆寫';
+
+  @override
+  String get telegramSection => 'Telegram 家庭排行榜';
+
+  @override
+  String get telegramChannel => '頻道（@使用者名稱）';
+
+  @override
+  String get telegramToken => 'Bot token（選填）';
+
+  @override
+  String get telegramHelp => '頻道需為公開頻道。Token 留空則用分享選單送出分數。';
+
+  @override
+  String get telegramTest => '測試';
+
+  @override
+  String get telegramTestOk => '連線正常';
+
+  @override
+  String get telegramTestFail => '連線失敗';
+
+  @override
+  String get telegramInvalidChannel => '頻道名稱格式錯誤（5 個以上英數或底線，且以英文字母開頭）';
+
+  @override
+  String get sendToTelegram => '送到 Telegram';
+
+  @override
+  String get telegramSent => '已送到 Telegram';
+
+  @override
+  String get telegramNotPlayedToday => '請先玩今天的每日挑戰';
+
+  @override
+  String get telegramSendFailed => '送到 Telegram 失敗';
 }
