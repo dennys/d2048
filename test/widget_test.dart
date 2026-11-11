@@ -43,6 +43,20 @@ class _ThrowOnceStore extends InMemorySharedPreferencesStore {
   }
 }
 
+/// 平台「不抛例外、直接回 false」的 store：真實 SharedPreferences 的 setString 可能這樣回報失敗。
+class _FalseStore extends InMemorySharedPreferencesStore {
+  _FalseStore(super.data) : super.withData();
+
+  int writeCalls = 0;
+
+  @override
+  Future<bool> setValue(String valueType, String key, Object value) async {
+    writeCalls++;
+    await super.setValue(valueType, key, value); // 記憶體快取照改（跟真 plugin 一樣）
+    return false;
+  }
+}
+
 /// 寫入全部卡在 [gate] 的 store：把「寫入還在飛、玩家已經換了」這個視窗固定住。
 class _GatedStore extends InMemorySharedPreferencesStore {
   _GatedStore(super.data) : super.withData();
@@ -986,6 +1000,73 @@ void main() {
     final stored = jsonDecode((await store.getAll())['flutter.saved_game/Player']! as String);
     expect(stored['moves'], 2); // 毒死時會停在第一次那筆（1）
     expect(store.writeCalls, greaterThan(2));
+  });
+
+  testWidgets('a failing snapshot save warns instead of pretending it worked', (tester) async {
+    // 1159a01 只做了一半：UI 提示只掛在 _persist。存快照失敗只有 debugPrint →
+    // 使用者以為存到了，重開 app 才發現什麼都沒有。
+    SharedPreferences.setMockInitialValues({});
+    final seedPrefs = await SharedPreferences.getInstance();
+    await seedPlayer(seedPrefs);
+    await seedBoard(seedPrefs, [
+      (id: 1, value: 2, row: 0, col: 0),
+      (id: 2, value: 4, row: 3, col: 3),
+    ]);
+    final seeded = await SharedPreferencesStorePlatform.instance.getAll();
+    final store = _FailingStore(seeded);
+    SharedPreferencesStorePlatform.instance = store;
+    SharedPreferences.resetStatic();
+    addTearDown(() {
+      SharedPreferencesStorePlatform.instance = InMemorySharedPreferencesStore.empty();
+      SharedPreferences.resetStatic();
+    });
+
+    final prefs = await SharedPreferences.getInstance();
+    final settings = await SettingsModel.load(prefs);
+    await tester.pumpWidget(Game2048App(settings: settings, prefs: prefs, random: Random(42)));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byIcon(Icons.bookmark_add_outlined));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField), 'test');
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+
+    expect(store.writeCalls, greaterThan(0)); // 快照那筆真的嘗試落盤（且失敗）
+    expect(find.textContaining("Couldn't save"), findsOneWidget); // 修之前：只有 debugPrint，半句提示都沒有
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('setString returning false counts as a failed save', (tester) async {
+    // SharedPreferences.setString 可能不抛、直接回 false（平台回報失敗）→
+    // 之前被當成寫入成功，lastError 仍是 null → 使用者永遠不會被告知。
+    SharedPreferences.setMockInitialValues({});
+    final seedPrefs = await SharedPreferences.getInstance();
+    await seedPlayer(seedPrefs);
+    await seedBoard(seedPrefs, [
+      (id: 1, value: 2, row: 0, col: 0),
+      (id: 2, value: 4, row: 3, col: 3),
+    ]);
+    final seeded = await SharedPreferencesStorePlatform.instance.getAll();
+    final store = _FalseStore(seeded);
+    SharedPreferencesStorePlatform.instance = store;
+    SharedPreferences.resetStatic();
+    addTearDown(() {
+      SharedPreferencesStorePlatform.instance = InMemorySharedPreferencesStore.empty();
+      SharedPreferences.resetStatic();
+    });
+
+    final prefs = await SharedPreferences.getInstance();
+    final settings = await SettingsModel.load(prefs);
+    await tester.pumpWidget(Game2048App(settings: settings, prefs: prefs, random: Random(42)));
+    await tester.pumpAndSettle();
+
+    await swipe(tester, -200, 0);
+    await tester.pumpAndSettle();
+
+    expect(store.writeCalls, greaterThan(0));
+    expect(find.textContaining("Couldn't save"), findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('layout survives a narrow phone with large system text', (tester) async {

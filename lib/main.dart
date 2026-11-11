@@ -644,6 +644,7 @@ class _GameScreenState extends State<GameScreen> {
       savedAt: now,
     ));
     await storage.saveSnapshots(snapshots);
+    _notifySaveFailure(); // 存快照失敗也要讓使用者知道（1159a01 只把提示掛在 _persist，這裡之前只有 debugPrint）
   }
 
   /// 快照 list：tap 載入、🗑 刪除。
@@ -657,8 +658,9 @@ class _GameScreenState extends State<GameScreen> {
           Navigator.pop(dialogContext);
           _loadSnapshot(s);
         },
-        onDelete: (remaining) {
-          storage.saveSnapshots(remaining);
+        onDelete: (remaining) async {
+          await storage.saveSnapshots(remaining);
+          _notifySaveFailure(); // 同 _saveSnapshot：刪不掉也要讓使用者知道，否則清單看起來像刪成功了
         },
       ),
     );

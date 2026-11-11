@@ -175,7 +175,12 @@ class GameStorage {
   /// 全案唯一的寫入入口：失敗只記錄 + log，不往上抛（一個小遊戲不該因存檔失敗而崩）。
   Future<void> _write(String key, String value) async {
     try {
-      await _prefs.setString(key, value);
+      // setString 也可能不抛、直接回 false（平台回報失敗）→ 也算失敗，否則這種失敗還是靜默成功。
+      if (!await _prefs.setString(key, value)) {
+        lastError = 'SharedPreferences.setString($key) reported failure';
+        debugPrint('d2048 write $key failed: platform reported false');
+        return;
+      }
       lastError = null;
     } catch (e) {
       lastError = '$e';
