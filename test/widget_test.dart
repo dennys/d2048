@@ -1099,6 +1099,52 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('a failing snapshot delete warns instead of looking like it worked', (tester) async {
+    // A-6 的另外半邊：快照清單的 onDelete 之前 fire-and-forget、失敗只有 debugPrint →
+    // 看起來像刪成功了，重開 app 快照又回來。
+    // 不能「先存再刪」測同一支：第一次提示後 _warnedSaveFailure 已為 true，第二顆
+    // SnackBar 會被自己壓掉，斷言就不會 discriminate —— 所以這裡啟動後只能有這一次寫入。
+    SharedPreferences.setMockInitialValues({});
+    final seedPrefs = await SharedPreferences.getInstance();
+    await seedPlayer(seedPrefs);
+    await seedBoard(seedPrefs, [ // 有存檔可接續 → 啟動時不會自動存檔
+      (id: 1, value: 2, row: 0, col: 0),
+      (id: 2, value: 4, row: 3, col: 3),
+    ]);
+    await GameStorage(seedPrefs).saveSnapshots([ // 先放一份要刪的快照
+      BoardSnapshot(
+        name: 'keep',
+        boardSize: 4,
+        tiles: [(id: 1, value: 2, row: 0, col: 0)],
+        score: 1,
+        savedAt: DateTime(2026, 11, 10),
+      ),
+    ]);
+    final seeded = await SharedPreferencesStorePlatform.instance.getAll();
+    final store = _FailingStore(seeded);
+    SharedPreferencesStorePlatform.instance = store;
+    SharedPreferences.resetStatic();
+    addTearDown(() {
+      SharedPreferencesStorePlatform.instance = InMemorySharedPreferencesStore.empty();
+      SharedPreferences.resetStatic();
+    });
+
+    final prefs = await SharedPreferences.getInstance();
+    final settings = await SettingsModel.load(prefs);
+    await tester.pumpWidget(Game2048App(settings: settings, prefs: prefs, random: Random(42)));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byIcon(Icons.folder_outlined));
+    await tester.pumpAndSettle();
+    expect(find.text('keep'), findsOneWidget);
+    await tester.tap(find.byIcon(Icons.delete_outline));
+    await tester.pumpAndSettle();
+
+    expect(store.writeCalls, greaterThan(0)); // 刪除那筆真的嘗試落盤（且失敗）
+    expect(find.textContaining("Couldn't save"), findsOneWidget); // 修之前：只有 debugPrint
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('setString returning false counts as a failed save', (tester) async {
     // SharedPreferences.setString 可能不抛、直接回 false（平台回報失敗）→
     // 之前被當成寫入成功，lastError 仍是 null → 使用者永遠不會被告知。
