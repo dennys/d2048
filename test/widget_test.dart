@@ -463,6 +463,25 @@ void main() {
     expect(storage.loadPlayers(), ['Amy', 'x' * PrefsDefaults.playerNameLimit]);
   });
 
+  test('addPlayer does not invent a phantom player while the players list is corrupt', () async {
+    // 清單讀不到 → 大小寫去重失去比對依據：打 'amy' 不會合併進 'Amy'，會多一個空資料的
+    // 幽靈玩家还把目前玩家切過去 —— 本案不能刪也不能改名，就再也回不到 Amy 了。
+    const broken = '["Amy","Bob"'; // 少了結尾 → 損毀
+    SharedPreferences.setMockInitialValues({
+      Prefs.players: broken,
+      Prefs.currentPlayer: 'Amy',
+      '${Prefs.stats}/Amy': jsonEncode(GameStats(gamesPlayed: 5).toJson()),
+    });
+    final prefs = await SharedPreferences.getInstance();
+    final storage = GameStorage(prefs);
+    expect(storage.playersCorrupted, isTrue);
+
+    expect(await storage.addPlayer('amy'), 'Amy'); // 不建、不切 → 留在能玩的玩家上
+    expect(storage.currentPlayer, 'Amy');
+    expect(storage.loadStats().gamesPlayed, 5); // Amy 的資料還在手上，沒被幽靈玩家取代
+    expect(prefs.getString(Prefs.players), broken); // 原字串仍然不動
+  });
+
   test('empty current_player falls back to the first player', () async {
     // players 還在、current_player 卻不見（被清掉／備份還原到一半）：修之前所有讀寫都落在
     // `saved_game/`（尾巴一個 /）→ Amy 的舊資料永遠讀不到，AppBar 也只剩空白。

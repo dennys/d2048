@@ -229,6 +229,9 @@ class GameStorage {
   Future<String> addPlayer(String name) async {
     final capped = String.fromCharCodes(name.trim().runes.take(PrefsDefaults.playerNameLimit));
     if (capped.isEmpty) return currentPlayer; // 全空白 → 不建玩家，也不換人
+    if (playersCorrupted) return currentPlayer;
+    // 清單讀不到 → 去重失去比對依據，打 'amy' 不會合併進 'Amy'，會多出一個空資料的幽靈
+    // 玩家还把目前玩家切過去（本案不能刪也不能改名，就再也回不去了）。壞掉期間不新增也不換人。
     final players = loadPlayers();
     var canonical = capped;
     for (final p in players) {
@@ -237,8 +240,7 @@ class GameStorage {
         break;
       }
     }
-    if (!players.contains(canonical) && !playersCorrupted) {
-      // players 損毀時**不寫清單**：寧可這次沒登記新玩家，也不能把還有救的原字串蓋成只有他。
+    if (!players.contains(canonical)) {
       players.add(canonical);
       await _write(Prefs.players, jsonEncode(players));
     }
