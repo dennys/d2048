@@ -996,10 +996,58 @@ class _GameScreenState extends State<GameScreen> {
               child: Center(
                 child: AspectRatio(
                   aspectRatio: 1.0,
-                  child: GestureDetector(
-                    onVerticalDragEnd: (details) => _swipe(details.velocity),
-                    onHorizontalDragEnd: (details) => _swipe(details.velocity),
-                    child: RepaintBoundary(key: _boardBoundaryKey, child: _buildBoard()),
+                  child: Stack(
+                    children: [
+                      GestureDetector(
+                        onVerticalDragEnd: (details) => _swipe(details.velocity),
+                        onHorizontalDragEnd: (details) => _swipe(details.velocity),
+                        child: RepaintBoundary(key: _boardBoundaryKey, child: _buildBoard()),
+                      ),
+                      // 遮罩蓋在棋盤上（不是整個 body）：破局後遮罩外的 Undo 仍能按，
+                      // 「退一步」是 Play Again 之外的另一條出路；分享截圖也不會拍到黑底。
+                      // Win overlay（過關但選擇繼續前）
+                      if (won && !keepPlaying)
+                        _scrim([
+                          Text(
+                            l.youWin,
+                            style: const TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 28,
+                                            fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          ElevatedButton(
+                            onPressed: () => setState(() {
+                                            keepPlaying = true;
+                                            _persist();
+                            }),
+                            child: Text(l.keepPlaying),
+                          ),
+                          const SizedBox(height: 8),
+                          ElevatedButton(
+                            onPressed: _newGame,
+                            child: Text(l.newGame),
+                          ),
+                        ])
+                      // Game over overlay
+                      else if (gameOver)
+                        _scrim([
+                          Text(
+                            l.gameOver,
+                            style: const TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 28,
+                                            fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          ElevatedButton(
+                            onPressed: () => setState(_initializeGame),
+                            child: Text(l.playAgain),
+                          ),
+                        ]),
+                    ],
                   ),
                 ),
               ),
@@ -1017,48 +1065,6 @@ class _GameScreenState extends State<GameScreen> {
           ],
         ),
           ),
-        // Win overlay（過關但選擇繼續前）
-        if (won && !keepPlaying)
-          _scrim([
-            Text(
-              l.youWin,
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 28,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: 16),
-            ElevatedButton(
-              onPressed: () => setState(() {
-                keepPlaying = true;
-                _persist();
-              }),
-              child: Text(l.keepPlaying),
-            ),
-            const SizedBox(height: 8),
-            ElevatedButton(
-              onPressed: _newGame,
-              child: Text(l.newGame),
-            ),
-          ])
-        // Game over overlay
-        else if (gameOver)
-          _scrim([
-            Text(
-              l.gameOver,
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 28,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: 16),
-            ElevatedButton(
-              onPressed: () => setState(_initializeGame),
-              child: Text(l.playAgain),
-            ),
-          ]),
         // 里程碑慶祝（1024/2048/4096）：全屏動畫，1.6 秒後自動消失
         if (_celebrateTile > 0)
           IgnorePointer(

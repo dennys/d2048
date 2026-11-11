@@ -12,7 +12,7 @@
 - **Must fix（資料遺失／崩潰）**
   - 玩家選單的「新增玩家」欄打**既有**名字 → `onAdd`（`addPlayer`）已同步把 `currentPlayer` 改掉，`_switchPlayer` 卻拿活值比對而 early-return → 畫面還是上一位的盤，下一手把 A 的棋盤寫進 `saved_game/B`（**B 的進度消失**）。實測重現：`saved_game/B` 被覆寫成 `ids 1,2 / score 11 / moves 4`。→ `_switchPlayer` 改與「開選單前的人」比對。
   - `players.dart` 兩個對白框的 `TextEditingController` 在 `await showDialog` 後馬上 dispose，退場動畫期間 TextField 還在樹上 →「Who's playing?」輸入名字按 Save 就 `used after being disposed`（加級聯 layout/scheduler assertion，整個遊戲畫面消失）。→ 改 `StatefulWidget`，在 `dispose()` 釋放（比照 `snapshots.dart`）。
-  - 「You win!」／「Game Over!」**不是覆蓋層**：兩個 `Container(black54)` 是 body `Column` 的一列 → 沒蓋住棋盤、黑底出現在棋盤**下方**，還把 `Expanded` 的棋盤擠小。→ 搬到外層 `Stack` 的 `Positioned.fill`；雨個遮罩抽成 `_scrim()`（順帶去重复）。
+  - 「You win!」／「Game Over!」**不是覆蓋層**：兩個 `Container(black54)` 是 body `Column` 的一列 → 沒蓋住棋盤、黑底出現在棋盤**下方**，還把 `Expanded` 的棋盤擠小。→ 改放 `Positioned.fill`，兩個遮罩抽成 `_scrim()`（順帶去重复）。**範圍定在棋盤自己的 Stack、不是 body**：第一版放 body 時 `ColoredBox` 吃掉所有點擊 → 破局後摸不到 Undo（遮罩只剩 Play Again）；只蓋棋盤則破局後「退一步」仍是出路，分享截圖也不會拍到黑底。守門：`win overlay…` 測試多一段「overlay 顯示中 tap Undo → overlay 消失」（用假造的全身遮罩驗過：不改就紅）。
   - 切玩家沒等 `_pending` → 在飛的寫入會落到換好的人 namespace。→ `setCurrentPlayer` 前 `await _pending`。
 - **Should fix**
   - 玩家選單不能捲（`Column` 直排 `ListTile`）→ 玩家一多「新增」那列被擠出對白框。→ 清單改 `Flexible + ListView(shrinkWrap)`。

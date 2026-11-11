@@ -38,10 +38,9 @@ void main() {
   /// 目前 board 上的方塊（tile id → (value, row, col)）。
   /// 從 AnimatedPositioned 的 left/top 反推 row/col（gap=8，cell 由 Stack 寬度決定）。
   Map<int, (int, int, int)> readBoard(WidgetTester tester, int size) {
-    final stackFinder = find.descendant(
-      of: find.byType(AspectRatio),
-      matching: find.byType(Stack),
-    );
+    // 棋盤外面還有一層放遮罩的 Stack → 取最內層（尺寸才是 side，cell 算式才對得上）。
+    final stackFinder =
+        find.descendant(of: find.byType(AspectRatio), matching: find.byType(Stack)).last;
     const gap = 8.0;
     final cell = (tester.getSize(stackFinder).width - gap * (size + 1)) / size;
     final result = <int, (int, int, int)>{};
@@ -642,6 +641,12 @@ void main() {
       find.ancestor(of: find.text('You win!'), matching: find.byType(ColoredBox)).first,
     );
     expect(scrim.contains(boardAfter.center), isTrue);
+
+    // 遮罩只蓋棋盤、不蓋整個 body → 遮罩外的 Undo 仍能按（破局後的出路）。
+    await tester.tap(find.text('Undo'));
+    await tester.pumpAndSettle();
+    expect(find.text('You win!'), findsNothing);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('daily game is always 4x4 whatever the last board size was', (tester) async {
