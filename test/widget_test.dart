@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
 
@@ -42,6 +43,23 @@ class _ThrowOnceStore extends InMemorySharedPreferencesStore {
   }
 }
 
+/// 寫入全部卡在 [gate] 的 store：把「寫入還在飛、玩家已經換了」這個視窗固定住。
+class _GatedStore extends InMemorySharedPreferencesStore {
+  _GatedStore(super.data) : super.withData();
+
+  final Completer<void> gate = Completer<void>();
+  int writeCalls = 0;
+
+  void release() => gate.complete();
+
+  @override
+  Future<bool> setValue(String valueType, String key, Object value) async {
+    writeCalls++;
+    await gate.future;
+    return super.setValue(valueType, key, value);
+  }
+}
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -58,14 +76,15 @@ void main() {
 
   /// 預存一份確定性存檔（app 啟動時接續），讓 board 不依賴隨機。
   Future<void> seedBoard(SharedPreferences prefs, List<({int id, int value, int row, int col})> tiles) async {
-    await GameStorage(prefs).saveGame(SavedGame(
+    final storage = GameStorage(prefs);
+    await storage.saveGame(SavedGame(
       boardSize: 4,
       tiles: tiles,
       score: 0,
       moves: 0,
       undoCount: 0,
       keepPlaying: false,
-    ), GameMode.normal);
+    ), GameMode.normal, storage.currentPlayer);
   }
 
   /// 目前 board 上的方塊（tile id → (value, row, col)）。
@@ -412,7 +431,7 @@ void main() {
     final storage = GameStorage(prefs);
     await storage.addPlayer('A');
     await storage.setBestScore(4, 100);
-    await storage.saveStats(GameStats(gamesPlayed: 7));
+    await storage.saveStats(GameStats(gamesPlayed: 7), storage.currentPlayer);
     await storage.addPlayer('B');
     expect(storage.currentPlayer, 'B');
     expect(storage.bestScore(4), 0);
@@ -480,9 +499,9 @@ void main() {
     await seedPlayer(prefs, 'A');
     final storage = GameStorage(prefs);
     final today = dailySeedFor(DateTime.now());
-    await storage.saveStats(GameStats(dailyBest: 500, lastDailyDate: today)); // A（目前玩家）
+    await storage.saveStats(GameStats(dailyBest: 500, lastDailyDate: today), storage.currentPlayer); // A（目前玩家）
     await storage.addPlayer('B'); // current → B
-    await storage.saveStats(GameStats(dailyBest: 900, lastDailyDate: today)); // B
+    await storage.saveStats(GameStats(dailyBest: 900, lastDailyDate: today), storage.currentPlayer); // B
     await storage.setCurrentPlayer('A');
 
     await tester.pumpWidget(Game2048App(settings: settings, prefs: prefs));
@@ -562,7 +581,7 @@ void main() {
           undoCount: 0,
           keepPlaying: false,
         ),
-        GameMode.normal);
+        GameMode.normal, storage.currentPlayer);
     await storage.addPlayer('B');
     await storage.saveGame(
         SavedGame(
@@ -573,7 +592,7 @@ void main() {
           undoCount: 0,
           keepPlaying: false,
         ),
-        GameMode.normal);
+        GameMode.normal, storage.currentPlayer);
     await storage.setCurrentPlayer('A');
     return prefs;
   }
@@ -617,6 +636,48 @@ void main() {
     final bSave = GameStorage(prefs);
     await bSave.setCurrentPlayer('B');
     expect(bSave.loadSavedGame(GameMode.normal)!.tiles.map((t) => t.id), containsAll(<int>[7, 8]));
+  });
+
+  testWidgets('a save queued before a player switch stays in the old player namespace', (tester) async {
+    // saveGame／saveStats 早期用 currentPlayer 的「活值」：第一筆寫入卡在 gate 裡時，
+    // 第二筆的回呼要等到寫入才執行 —— 那時候 addPlayer 早已把 currentPlayer 翻成 B，
+    // 於是 A 的盤落盤到 saved_game/B，把 B 的進度盖掉（`await _pending` 保不到它）。
+    await seedTwoPlayers();
+    final seeded = await SharedPreferencesStorePlatform.instance.getAll();
+    final store = _GatedStore(seeded);
+    SharedPreferencesStorePlatform.instance = store;
+    SharedPreferences.resetStatic();
+    addTearDown(() {
+      SharedPreferencesStorePlatform.instance = InMemorySharedPreferencesStore.empty();
+      SharedPreferences.resetStatic();
+    });
+
+    final prefs = await SharedPreferences.getInstance();
+    final settings = await SettingsModel.load(prefs);
+    await tester.pumpWidget(Game2048App(settings: settings, prefs: prefs, random: Random(1)));
+    await tester.pumpAndSettle();
+
+    await swipe(tester, -200, 0); // seed 是 moves:3 → 兩步後 A 應該到 5
+    await swipe(tester, 0, -200); // 兩筆寫入都還卡在 gate 裡
+    expect(find.textContaining('Moves: 5'), findsOneWidget);
+
+    // 在飛的寫入還沒落盤就換人（Add 欄敲既有名字 → onAdd → addPlayer 同步翻 currentPlayer）
+    await tester.tap(find.descendant(of: find.byType(AppBar), matching: find.text('A')));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField), 'B');
+    await tester.tap(find.widgetWithText(ElevatedButton, 'Add'));
+    await tester.pump();
+
+    store.release();
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+
+    final all = await store.getAll();
+    final forB = jsonDecode(all['flutter.saved_game/B']! as String) as Map<String, dynamic>;
+    final forA = jsonDecode(all['flutter.saved_game/A']! as String) as Map<String, dynamic>;
+    // 寫錯人時 B 會被塞進 A 的盤（id 1,2,…）、A 则停在 seed 的 3 步。
+    expect([for (final t in forB['tiles'] as List<dynamic>) t['id']], <int>[7, 8]);
+    expect(forA['moves'], 5);
   });
 
   testWidgets('player dialogs do not use a disposed controller', (tester) async {

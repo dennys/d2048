@@ -244,8 +244,11 @@ class GameStorage {
     }
   }
 
-  Future<void> saveGame(SavedGame game, GameMode mode) async {
-    await _write(_key(mode == GameMode.daily ? Prefs.savedGameDaily : Prefs.savedGame), jsonEncode(game.toJson()));
+  /// [player] 由呼叫端在「排程當下」就給定（同 [setBestScore] 同步算 key 的做法）：
+  /// 等寫入真正執行時 `currentPlayer` 可能已經被 `addPlayer` 翻掉了，到時才解析會寫到錯人 namespace。
+  Future<void> saveGame(SavedGame game, GameMode mode, String player) async {
+    final key = _key(mode == GameMode.daily ? Prefs.savedGameDaily : Prefs.savedGame, player);
+    await _write(key, jsonEncode(game.toJson()));
   }
 
   List<BoardSnapshot> loadSnapshots() {
@@ -315,7 +318,8 @@ class GameStorage {
     }
   }
 
-  Future<void> saveStats(GameStats stats) async {
-    await _write(_key(Prefs.stats), jsonEncode(stats.toJson()));
+  /// [player] 同 [saveGame]：排程當下就定型，不要在寫入執行時才讀 `currentPlayer`。
+  Future<void> saveStats(GameStats stats, String player) async {
+    await _write(_key(Prefs.stats, player), jsonEncode(stats.toJson()));
   }
 }

@@ -438,14 +438,18 @@ class _GameScreenState extends State<GameScreen> {
       seed: _seed,
     );
     final mode = this.mode;
+    // 玩家在「排進鏈」的當下就 capture（同 GameStorage.setBestScore 同步算 key）：
+    // 回呼真正執行時 currentPlayer 可能已被 addPlayer 翻掉 —— `_switchPlayer` 的
+    // `await _pending` 保不到它，那時才解析 key 就會寫到新玩家的 namespace。
+    final player = storage.currentPlayer;
     // 鏈尾必須隔離例外：Dart 的 then 對「已失敗的 Future」跳回呼、原樣把錯傳下去，
     // 所以鏈上只要拋一次，之後每一次 _persist() 的回呼都永不執行 —— 這次啟動就再也不自動
     // 存檔，而且完全靜默。_notifySaveFailure() 要碰 context／ScaffoldMessenger，
     // 不能讓它（或鏈上任何一支寫入）把整條鏈毒死。
     _pending = _pending
         .then((_) async {
-          await storage.saveGame(game, mode);
-          await storage.saveStats(stats);
+          await storage.saveGame(game, mode, player);
+          await storage.saveStats(stats, player);
           _notifySaveFailure(); // 留在鏈內：它讀的是這一批寫入剛設好的 storage.lastError
         })
         .catchError((Object e) => debugPrint('d2048 persist step failed: $e'));
