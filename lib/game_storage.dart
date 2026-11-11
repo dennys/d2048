@@ -158,6 +158,12 @@ class GameStorage {
   final SharedPreferences _prefs;
   String currentPlayer = '';
 
+  /// [loadPlayers] 讀到損毀的 players JSON 時為 true。
+  ///
+  /// 「沒有玩家」與「清單壞掉」必須區分：把損毀当成沒玩家 → 出「誰在玩」→
+  /// 下一次 addPlayer 把清單盖成 ['新名字'] → 舊玩家的全部資料永遠不可達。
+  bool playersCorrupted = false;
+
   /// 最近一次寫入失敗的原因（null = 正常）。
   ///
   /// SharedPreferences 是先同步改記憶體快取、再非同步落盤，所以寫入失敗時遊戲照玩、
@@ -201,7 +207,11 @@ class GameStorage {
     if (raw == null) return [];
     try {
       return (jsonDecode(raw) as List<dynamic>).whereType<String>().toList();
-    } catch (_) {
+    } catch (e) {
+      // 損毀 ≠ 沒有：照樣回空清單（呼叫端靠 [playersCorrupted] 分辨），但原始字串一律留著不動。
+      playersCorrupted = true;
+      lastError ??= 'players list undecodable: $e';
+      debugPrint('d2048 players undecodable: $e');
       return [];
     }
   }
@@ -222,7 +232,8 @@ class GameStorage {
         break;
       }
     }
-    if (!players.contains(canonical)) {
+    if (!players.contains(canonical) && !playersCorrupted) {
+      // players 損毀時**不寫清單**：寧可這次沒登記新玩家，也不能把還有救的原字串盖成只有他。
       players.add(canonical);
       await _write(Prefs.players, jsonEncode(players));
     }

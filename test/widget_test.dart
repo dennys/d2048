@@ -739,6 +739,41 @@ void main() {
     expect(GameStorage(prefs).currentPlayer, 'Mum');
   });
 
+  testWidgets('a corrupt players list is not treated as "no players"', (tester) async {
+    // loadPlayers() 原本 `catch (_) => []` → 「壞掉」看起来像「沒玩家」→ 出「誰在玩」→
+    // 下一次 addPlayer 把清單盖成只有一人，Amy 的舊資料全部變孤兒。
+    const broken = '{this is not a list';
+    SharedPreferences.setMockInitialValues({
+      Prefs.players: broken,
+      Prefs.currentPlayer: 'Amy',
+      '${Prefs.savedGame}/Amy': jsonEncode(SavedGame(
+        boardSize: 4,
+        tiles: [(id: 1, value: 2, row: 0, col: 0), (id: 2, value: 4, row: 3, col: 3)],
+        score: 11,
+        moves: 3,
+        undoCount: 0,
+        keepPlaying: false,
+      ).toJson()),
+    });
+    final prefs = await SharedPreferences.getInstance();
+    final settings = await SettingsModel.load(prefs);
+    await tester.pumpWidget(Game2048App(settings: settings, prefs: prefs, random: Random(1)));
+    await tester.pumpAndSettle();
+
+    // 不進「誰在玩」流程，而是照常接續 Amy 的局，並提示一次
+    expect(find.text("Who's playing?"), findsNothing);
+    expect(find.textContaining('Score: 11'), findsOneWidget);
+    expect(find.textContaining("Couldn't read the player list"), findsOneWidget);
+    expect(tester.takeException(), isNull);
+
+    // 壞掉的東西一律留著：滑一下（觸發自動存檔）再多一位玩家，都不能把原字串盖掉
+    await swipe(tester, -200, 0);
+    await tester.pumpAndSettle();
+    await GameStorage(prefs).addPlayer('Mum');
+    expect(prefs.getString(Prefs.players), broken);
+    expect(prefs.getString('${Prefs.savedGame}/Amy'), isNotNull); // Amy 的存檔還在
+  });
+
   testWidgets('win overlay covers the board without shrinking it', (tester) async {
     final settings = await loadSettings();
     final prefs = await SharedPreferences.getInstance();

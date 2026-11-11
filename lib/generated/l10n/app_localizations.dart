@@ -405,6 +405,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Couldn\'t save your game (out of storage?). This round may not be kept.'**
   String get saveFailed;
+
+  /// No description provided for @dataBroken.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t read the player list (saved data is damaged). Nothing was overwritten.'**
+  String get dataBroken;
 }
 
 class _AppLocalizationsDelegate

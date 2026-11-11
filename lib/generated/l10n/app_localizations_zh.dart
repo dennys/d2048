@@ -165,6 +165,9 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get saveFailed => '儲存失敗（儲存空間不足？）：這一局可能不會被存起來';
+
+  @override
+  String get dataBroken => '讀不到玩家清單（儲存資料損毀）：已保留原始資料，不會覆寫';
 }
 
 /// The translations for Chinese, using the Han script (`zh_Hans`).
@@ -327,6 +330,9 @@ class AppLocalizationsZhHans extends AppLocalizationsZh {
 
   @override
   String get saveFailed => '储存失败（存储空间不足？）：这一局可能不会被保存';
+
+  @override
+  String get dataBroken => '读不到玩家清单（储存资料损毁）：已保留原始资料，不会覆写';
 }
 
 /// The translations for Chinese, using the Han script (`zh_Hant`).
@@ -489,4 +495,7 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
 
   @override
   String get saveFailed => '儲存失敗（儲存空間不足？）：這一局可能不會被存起來';
+
+  @override
+  String get dataBroken => '讀不到玩家清單（儲存資料損毀）：已保留原始資料，不會覆寫';
 }

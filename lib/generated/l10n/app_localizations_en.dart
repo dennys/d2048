@@ -167,4 +167,8 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get saveFailed =>
       'Couldn\'t save your game (out of storage?). This round may not be kept.';
+
+  @override
+  String get dataBroken =>
+      'Couldn\'t read the player list (saved data is damaged). Nothing was overwritten.';
 }

@@ -114,13 +114,21 @@ class _GameScreenState extends State<GameScreen> {
   void initState() {
     super.initState();
     storage = GameStorage(widget.prefs);
-    if (storage.loadPlayers().isEmpty) {
+    if (storage.loadPlayers().isEmpty && !storage.playersCorrupted) {
       _awaitingPlayer = true;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) _askPlayerName();
       });
     } else {
       _loadForCurrentPlayer();
+      if (storage.playersCorrupted) {
+        // players 損毀不等於「還沒玩家」：進「誰在玩」→ 下一次 addPlayer 把清單盖成只有新人，
+        // 舊玩家全部資料就永遠不可達。照常接續目前玩家的局（current_player 仍看得到他），
+        // 只提示一次；原始字串由 GameStorage 保留不動，留人工救回的機會。
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) _notifySaveFailure();
+        });
+      }
     }
   }
 
@@ -455,10 +463,10 @@ class _GameScreenState extends State<GameScreen> {
         .catchError((Object e) => debugPrint('d2048 persist step failed: $e'));
   }
 
-  /// 寫入失敗只提示一次（同一場失敗不會每步都噴 SnackBar）；某次寫入成功後重設，
+  /// 寫入失敗（或 players 清單損毀）只提示一次（同一場失敗不會每步都噴 SnackBar）；某次寫入成功後重設，
   /// 下次再壞會再提示。不重試也不崩：見 GameStorage.lastError 的說明。
   void _notifySaveFailure() {
-    if (storage.lastError == null) {
+    if (storage.lastError == null && !storage.playersCorrupted) {
       _warnedSaveFailure = false;
       return;
     }
@@ -468,7 +476,7 @@ class _GameScreenState extends State<GameScreen> {
     if (l == null) return;
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(content: Text(l.saveFailed)));
+      ..showSnackBar(SnackBar(content: Text(storage.playersCorrupted ? l.dataBroken : l.saveFailed)));
   }
 
   /// 目前 board 的 TileData（不含已移除的合併殘骸）。
