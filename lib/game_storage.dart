@@ -160,8 +160,8 @@ class GameStorage {
 
   /// [loadPlayers] 讀到損毀的 players JSON 時為 true。
   ///
-  /// 「沒有玩家」與「清單壞掉」必須區分：把損毀当成沒玩家 → 出「誰在玩」→
-  /// 下一次 addPlayer 把清單盖成 ['新名字'] → 舊玩家的全部資料永遠不可達。
+  /// 「沒有玩家」與「清單壞掉」必須區分：把損毀當成沒玩家 → 出「誰在玩」→
+  /// 下一次 addPlayer 把清單蓋成 ['新名字'] → 舊玩家的全部資料永遠不可達。
   bool playersCorrupted = false;
 
   /// 最近一次寫入失敗的原因（null = 正常）。
@@ -238,7 +238,7 @@ class GameStorage {
       }
     }
     if (!players.contains(canonical) && !playersCorrupted) {
-      // players 損毀時**不寫清單**：寧可這次沒登記新玩家，也不能把還有救的原字串盖成只有他。
+      // players 損毀時**不寫清單**：寧可這次沒登記新玩家，也不能把還有救的原字串蓋成只有他。
       players.add(canonical);
       await _write(Prefs.players, jsonEncode(players));
     }

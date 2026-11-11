@@ -714,7 +714,7 @@ void main() {
   testWidgets('a save queued before a player switch stays in the old player namespace', (tester) async {
     // saveGame／saveStats 早期用 currentPlayer 的「活值」：第一筆寫入卡在 gate 裡時，
     // 第二筆的回呼要等到寫入才執行 —— 那時候 addPlayer 早已把 currentPlayer 翻成 B，
-    // 於是 A 的盤落盤到 saved_game/B，把 B 的進度盖掉（`await _pending` 保不到它）。
+    // 於是 A 的盤落盤到 saved_game/B，把 B 的進度蓋掉（`await _pending` 保不到它）。
     await seedTwoPlayers();
     final seeded = await SharedPreferencesStorePlatform.instance.getAll();
     final store = _GatedStore(seeded);
@@ -748,7 +748,7 @@ void main() {
     final all = await store.getAll();
     final forB = jsonDecode(all['flutter.saved_game/B']! as String) as Map<String, dynamic>;
     final forA = jsonDecode(all['flutter.saved_game/A']! as String) as Map<String, dynamic>;
-    // 寫錯人時 B 會被塞進 A 的盤（id 1,2,…）、A 则停在 seed 的 3 步。
+    // 寫錯人時 B 會被塞進 A 的盤（id 1,2,…）、A 則停在 seed 的 3 步。
     expect([for (final t in forB['tiles'] as List<dynamic>) t['id']], <int>[7, 8]);
     expect(forA['moves'], 5);
   });
@@ -778,8 +778,8 @@ void main() {
   });
 
   testWidgets('a corrupt players list is not treated as "no players"', (tester) async {
-    // loadPlayers() 原本 `catch (_) => []` → 「壞掉」看起来像「沒玩家」→ 出「誰在玩」→
-    // 下一次 addPlayer 把清單盖成只有一人，Amy 的舊資料全部變孤兒。
+    // loadPlayers() 原本 `catch (_) => []` → 「壞掉」看起來像「沒玩家」→ 出「誰在玩」→
+    // 下一次 addPlayer 把清單蓋成只有一人，Amy 的舊資料全部變孤兒。
     const broken = '{this is not a list';
     SharedPreferences.setMockInitialValues({
       Prefs.players: broken,
@@ -804,7 +804,7 @@ void main() {
     expect(find.textContaining("Couldn't read the player list"), findsOneWidget);
     expect(tester.takeException(), isNull);
 
-    // 壞掉的東西一律留著：滑一下（觸發自動存檔）再多一位玩家，都不能把原字串盖掉
+    // 壞掉的東西一律留著：滑一下（觸發自動存檔）再多一位玩家，都不能把原字串蓋掉
     await swipe(tester, -200, 0);
     await tester.pumpAndSettle();
     await GameStorage(prefs).addPlayer('Mum');

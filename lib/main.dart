@@ -122,7 +122,7 @@ class _GameScreenState extends State<GameScreen> {
     } else {
       _loadForCurrentPlayer();
       if (storage.playersCorrupted) {
-        // players 損毀不等於「還沒玩家」：進「誰在玩」→ 下一次 addPlayer 把清單盖成只有新人，
+        // players 損毀不等於「還沒玩家」：進「誰在玩」→ 下一次 addPlayer 把清單蓋成只有新人，
         // 舊玩家全部資料就永遠不可達。照常接續目前玩家的局（current_player 仍看得到他），
         // 只提示一次；原始字串由 GameStorage 保留不動，留人工救回的機會。
         WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -465,6 +465,8 @@ class _GameScreenState extends State<GameScreen> {
 
   /// 寫入失敗（或 players 清單損毀）只提示一次（同一場失敗不會每步都噴 SnackBar）；某次寫入成功後重設，
   /// 下次再壞會再提示。不重試也不崩：見 GameStorage.lastError 的說明。
+  /// shortcut: playersCorrupted 為 true 期間，後來的寫入失敗不會再噴第二次（共用同一個
+  /// [_warnedSaveFailure]），真要分清就拆兩個旗標。
   void _notifySaveFailure() {
     if (storage.lastError == null && !storage.playersCorrupted) {
       _warnedSaveFailure = false;
