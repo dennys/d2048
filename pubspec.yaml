@@ -35,7 +35,7 @@ dependencies:
     sdk: flutter
   intl: ^0.20.3
   # 13.x：gradle 已相容 AGP 9 Built-in Kotlin（10.x 無條件套 KGP 會被 AGP 9 擋）。
-  # 注意：13.x 走 jni（native C++），dgx1 需要 aarch64 cmake（已裝 ~/android-sdk/cmake/3.28.6）。
+  # 注意：13.x 走 jni（native C++），在 Linux/aarch64 開發機上需要 aarch64 cmake（已裝 ~/android-sdk/cmake/3.28.6）。
   share_plus: ^13.3.1
   shared_preferences: ^2.5.6
 
@@ -54,7 +54,7 @@ dev_dependencies:
   # 原本是 shared_preferences 的 transitive，version 跟 pubspec.lock 對齊（2.4.2）。
   shared_preferences_platform_interface: ^2.4.2
 
-# Linux/aarch64 主機（dgx1）：Google 不發 linux-aarch64 主機的 NDK/cmake（x86-64 版執行會報
+# Linux/aarch64 開發機：Google 不發 linux-aarch64 主機的 NDK/cmake（x86-64 版執行會報
 # `Syntax error: ")" unexpected`）。2.5.x 改走 jni/jni_flutter → 觸發 CMake 原生編譯 → 必敗。
 # 釘在「無 KGP（AGP 9 built-in Kotlin 相容）且無 jni」的最後版本。
 # 這是「那台主機」的限制，不是本專案的：x86-64／CI 能編 jni，用新版也沒問題（比照 dNeko）。

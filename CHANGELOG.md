@@ -73,7 +73,7 @@ Read-only review（`REVIEW.md`，已刪）對 2026-11-10 功能 backlog commit�
 - **分享成績**（`share_plus` 13.3.1）：share 對話框 → 文字（玩家/score/best/moves/max tile）或 board 截圖（`RepaintBoundary` → PNG → temp file）。13.x 的 gradle 已相容 AGP 9 built-in Kotlin（10.x 無條件套 KGP 會被擋）。
 - **本地排行榜**（`lib/widgets/leaderboards.dart`）：podium 按鈕，每格數 top 10（跨玩家，`bestScoreFor`），RadioGroup 切格數。
 - **l10n**：14 個新字串（players/whoIsPlaying/yourName/addPlayer/add/switchPlayer/daily/dailyLeaderboard/leaderboard/notPlayed/noScores/share/shareText/shareScreenshot），4 個 arb + `flutter gen-l10n`。
-- **dgx1 build 修復**：AGP 9 built-in Kotlin 下，新 plugin（shared_preferences_android 2.5.x、path_provider_android 2.3.x）走 jni → NDK（只有 x86-64 host）→ aarch64 編不了；舊 plugin（2.4.8）套 KGP 又被 AGP 9 擋。解法：pin「無 KGP 且無 jni」的最後版本 `shared_preferences_android 2.4.28` + `path_provider_android 2.2.23`（dNeko 同款模式，見 `~/dennys/AGENTS.md`）。
+- **Linux/aarch64 開發機 build 修復**：AGP 9 built-in Kotlin 下，新 plugin（shared_preferences_android 2.5.x、path_provider_android 2.3.x）走 jni → NDK（只有 x86-64 host）→ aarch64 編不了；舊 plugin（2.4.8）套 KGP 又被 AGP 9 擋。解法：pin「無 KGP 且無 jni」的最後版本 `shared_preferences_android 2.4.28` + `path_provider_android 2.2.23`（dNeko 同款模式，見 `~/dennys/AGENTS.md`）。
 - 驗收：`flutter analyze` No issues、`flutter test` 17/17（原 11 + 新 6：遷移、per-player namespace、daily seed、daily 接續、里程碑、daily 排行榜）、`flutter build apk --debug --target-platform android-arm64` ✓ 83.5 MiB。
 
 ---
