@@ -16,7 +16,7 @@ A 2048 puzzle game built with Flutter. Swipe to slide and merge tiles.
 - Win detection (2048) with "keep playing"
 - Haptics on merge (optional)
 - Lifetime stats (games, wins, max tile, merges)
-- Daily challenge with a family leaderboard via a public Telegram channel (optional)
+- Family leaderboard of all finished games via a public Telegram channel (optional)
 - Localization: English, 繁體中文, 简体中文
 - Light / dark theme
 
