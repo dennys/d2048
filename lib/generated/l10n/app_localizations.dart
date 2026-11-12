@@ -472,11 +472,11 @@ abstract class AppLocalizations {
   /// **'Sent to Telegram'**
   String get telegramSent;
 
-  /// No description provided for @telegramNotPlayedToday.
+  /// No description provided for @telegramNoGame.
   ///
   /// In en, this message translates to:
-  /// **'Play today\'s daily game first'**
-  String get telegramNotPlayedToday;
+  /// **'Finish a game first'**
+  String get telegramNoGame;
 
   /// No description provided for @telegramSendFailed.
   ///

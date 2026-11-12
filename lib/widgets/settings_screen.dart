@@ -61,7 +61,7 @@ class _TelegramSectionState extends State<_TelegramSection> {
       final token = widget.settings.telegramToken;
       final channel = widget.settings.telegramChannel;
       if (token.isNotEmpty) await TelegramService.getMeUsername(token);
-      if (channel.isNotEmpty) await TelegramService.fetchScores(channel);
+      if (channel.isNotEmpty) await TelegramService.fetchGames(channel);
       message = l.telegramTestOk;
     } on TelegramException catch (e) {
       message = '${l.telegramTestFail}: $e';

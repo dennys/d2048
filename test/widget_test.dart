@@ -585,32 +585,18 @@ void main() {
     expect(find.text('1024!'), findsNothing); // 自動消失
   });
 
-  testWidgets('daily leaderboard lists players by today score', (tester) async {
+  testWidgets('family leaderboard opens and shows empty state without a channel', (tester) async {
     final settings = await loadSettings();
     final prefs = await SharedPreferences.getInstance();
     await seedPlayer(prefs, 'A');
-    final storage = GameStorage(prefs);
-    final today = dailySeedFor(DateTime.now());
-    await storage.saveStats(GameStats(dailyBest: 500, lastDailyDate: today), storage.currentPlayer); // A（目前玩家）
-    await storage.addPlayer('B'); // current → B
-    await storage.saveStats(GameStats(dailyBest: 900, lastDailyDate: today), storage.currentPlayer); // B
-    await storage.setCurrentPlayer('A');
 
     await tester.pumpWidget(Game2048App(settings: settings, prefs: prefs));
     await tester.pumpAndSettle();
 
     await tester.tap(find.byIcon(Icons.emoji_events_outlined));
     await tester.pumpAndSettle();
-    expect(find.text('Daily leaderboard'), findsOneWidget);
-    // B（900）排第一、A（500）排第二
-    final items = tester.widgetList<ListTile>(find.descendant(of: find.byType(AlertDialog), matching: find.byType(ListTile))).toList();
-    expect(items.length, 2);
-    final firstTexts = tester.widgetList<Text>(find.descendant(of: find.byWidget(items.first), matching: find.byType(Text))).map((t) => t.data).toList();
-    expect(firstTexts, contains('B'));
-    expect(firstTexts, contains('900'));
-    final secondTexts = tester.widgetList<Text>(find.descendant(of: find.byWidget(items[1]), matching: find.byType(Text))).map((t) => t.data).toList();
-    expect(secondTexts, contains('A'));
-    expect(secondTexts, contains('500'));
+    expect(find.text('Telegram family leaderboard'), findsOneWidget);
+    expect(find.text('No scores yet'), findsOneWidget);
     tester.state<NavigatorState>(find.byType(Navigator)).pop();
     await tester.pumpAndSettle();
   });

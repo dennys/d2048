@@ -11,6 +11,7 @@ class Prefs {
   static const telegramChannel = 'telegram_channel';
   static const telegramToken = 'telegram_token';
   static const telegramCache = 'telegram_cache';
+  static const telegramLastGame = 'telegram_last_game';
 
   // 遊戲資料（GameStorage 用）；遊戲資料 key 一律 `<base>/<player>` namespace
   static const savedGame = 'saved_game';

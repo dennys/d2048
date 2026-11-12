@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../generated/l10n/app_localizations.dart';
-import '../game_storage.dart';
 import '../settings_keys.dart';
+import '../telegram_service.dart';
 
 /// 排行榜列：rank（粗體前 3 名）、name、score。
 Widget _rankRow({required String rank, required String name, required String score, required bool bold}) =>
@@ -13,38 +13,42 @@ Widget _rankRow({required String rank, required String name, required String sco
       trailing: Text(score),
     );
 
-/// 家庭每日排行榜：今天（[todaySeed]）各玩家 daily 局最高分，高→低；沒玩的排最後。
-class DailyLeaderboardDialog extends StatelessWidget {
-  final List<(String, GameStats)> rows; // (player, stats)
-  final int todaySeed;
+String _formatDate(int yyyymmdd) {
+  final y = yyyymmdd ~/ 10000;
+  final m = (yyyymmdd ~/ 100) % 100;
+  final d = yyyymmdd % 100;
+  return '$y-${m.toString().padLeft(2, '0')}-${d.toString().padLeft(2, '0')}';
+}
 
-  const DailyLeaderboardDialog({super.key, required this.rows, required this.todaySeed});
+/// 家庭排行榜：頻道上的所有對局，日期新→舊，同日分數高→低。名字顯示為小寫。
+class FamilyLeaderboardDialog extends StatelessWidget {
+  final List<TelegramGame> games;
+
+  const FamilyLeaderboardDialog({super.key, required this.games});
 
   @override
   Widget build(BuildContext context) {
     final l = AppLocalizations.of(context)!;
-    final played = rows.where((r) => r.$2.lastDailyDate == todaySeed).toList()
-      ..sort((a, b) => b.$2.dailyBest.compareTo(a.$2.dailyBest));
-    final rest = rows.where((r) => r.$2.lastDailyDate != todaySeed).toList()
-      ..sort((a, b) => a.$1.compareTo(b.$1));
+    final rows = TelegramService.ranked(games);
     return AlertDialog(
-      title: Text(l.dailyLeaderboard),
+      title: Text(l.telegramSection),
       content: SizedBox(
         width: 320,
-        child: ListView.builder(
-          shrinkWrap: true,
-          itemCount: played.length + rest.length,
-          itemBuilder: (context, i) {
-            final (name, stats) = i < played.length ? played[i] : rest[i - played.length];
-            final isPlayed = i < played.length;
-            return _rankRow(
-              rank: isPlayed ? '${i + 1}' : '·',
-              name: name,
-              score: isPlayed ? '${stats.dailyBest}' : l.notPlayed,
-              bold: i < 3,
-            );
-          },
-        ),
+        child: rows.isEmpty
+            ? Text(l.noScores)
+            : ListView.builder(
+                shrinkWrap: true,
+                itemCount: rows.length,
+                itemBuilder: (context, i) {
+                  final g = rows[i];
+                  return ListTile(
+                    dense: true,
+                    title: Text(g.player.toLowerCase()),
+                    subtitle: Text('${_formatDate(g.date)} · ${g.size}×${g.size}'),
+                    trailing: Text('${g.score}'),
+                  );
+                },
+              ),
       ),
     );
   }

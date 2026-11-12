@@ -205,7 +205,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get telegramSent => 'Sent to Telegram';
 
   @override
-  String get telegramNotPlayedToday => 'Play today\'s daily game first';
+  String get telegramNoGame => 'Finish a game first';
 
   @override
   String get telegramSendFailed => 'Couldn\'t send to Telegram';

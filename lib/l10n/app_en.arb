@@ -76,6 +76,6 @@
   "telegramInvalidChannel": "Invalid channel name (5+ letters, digits or _, starting with a letter)",
   "sendToTelegram": "Send to Telegram",
   "telegramSent": "Sent to Telegram",
-  "telegramNotPlayedToday": "Play today's daily game first",
+  "telegramNoGame": "Finish a game first",
   "telegramSendFailed": "Couldn't send to Telegram"
 }

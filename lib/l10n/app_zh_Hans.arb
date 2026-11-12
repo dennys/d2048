@@ -62,6 +62,6 @@
   "telegramInvalidChannel": "频道名称格式错误（5 个以上英数或下划线，且以英文字母开头）",
   "sendToTelegram": "发送到 Telegram",
   "telegramSent": "已发送到 Telegram",
-  "telegramNotPlayedToday": "请先玩今天的每日挑战",
+  "telegramNoGame": "请先完成一局",
   "telegramSendFailed": "发送到 Telegram 失败"
 }

@@ -52,14 +52,15 @@ Use one keystore for release — rotating it later breaks in-place upgrades.
 
 ## Telegram family leaderboard
 
-Share your daily challenge score to a public Telegram channel and see
-everyone's scores for today's board.
+Every finished game is posted to a public Telegram channel, and the
+leaderboard lists all games in the channel (name, date, board size, score),
+newest first.
 
 ### Setup
 
 1. **Create a public channel** in Telegram and give it a username, e.g. `@my_family_2048`.
    The leaderboard reads the public channel page, so it must be public.
-2. **Optional, for sending from the app:** create a bot with
+2. **Optional, for automatic sending:** create a bot with
    [@BotFather](https://t.me/BotFather) (`/newbot`) and copy its token.
    Add the bot to the channel as an administrator with the *Post Messages*
    permission.
@@ -73,26 +74,28 @@ and is only sent to `api.telegram.org`.
 
 ### Usage
 
-- **Send a score:** finish a daily challenge (`Daily`), then choose
-  **Send to Telegram** in the share dialog. The app posts a message in the form
-  `d2048 daily <yyyymmdd> <name> <score>`.
-  - With a bot token, the message is posted directly to the channel.
-  - Without a token, the system share sheet opens with the score text, so you can
-    paste it into the channel yourself.
-  - Only today's daily score can be sent, and only after you have played it.
-- **View the leaderboard:** open the daily leaderboard. It merges your local
-  scores with the channel's scores for today. If the network is unavailable, the
-  last cached channel scores are shown.
+- **Send automatically:** when a game ends and a bot token is set, the game is
+  posted to the channel. Each game has a unique id, so re-sending is safe and
+  duplicates are ignored. Messages have the form
+  `d2048 v2 <id> <yyyymmdd> <size> <name> <score>`.
+- **Send manually:** **Send to Telegram** in the share dialog re-sends the most
+  recently finished game. Without a token, it opens the system share sheet
+  instead, so you can paste the text into the channel yourself.
+- Failed sends show an error message and are not retried.
+- **View the leaderboard:** tap the leaderboard button. It shows the channel's
+  games. If the network is unavailable, the last cached games are shown.
 
 ### Limitations
 
-- The app reads only the channel's most recent ~20 messages, so older scores
+- The app reads only the channel's most recent ~20 messages, so older games
   can drop off the leaderboard.
 - Reading relies on Telegram's public web page (`t.me/s/<channel>`). If Telegram
-  changes that page layout, reading scores may stop working until the app is
+  changes that page layout, reading games may stop working until the app is
   updated.
-- The daily date comes from the message text (the sender's local date), so
-  players in different time zones may see different days near midnight.
+- Names are shown in lowercase, and each game is listed separately (no merging
+  of a player's games).
+- The game date is the local date when the game ended, so players in different
+  time zones may see different dates near midnight.
 - Release builds need network access: the Android `INTERNET` permission is
   declared in the manifest.
 

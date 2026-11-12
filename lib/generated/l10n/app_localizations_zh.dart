@@ -200,7 +200,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get telegramSent => '已送到 Telegram';
 
   @override
-  String get telegramNotPlayedToday => '請先玩今天的每日挑戰';
+  String get telegramNoGame => '請先完成一局';
 
   @override
   String get telegramSendFailed => '送到 Telegram 失敗';
@@ -401,7 +401,7 @@ class AppLocalizationsZhHans extends AppLocalizationsZh {
   String get telegramSent => '已发送到 Telegram';
 
   @override
-  String get telegramNotPlayedToday => '请先玩今天的每日挑战';
+  String get telegramNoGame => '请先完成一局';
 
   @override
   String get telegramSendFailed => '发送到 Telegram 失败';
@@ -602,7 +602,7 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
   String get telegramSent => '已送到 Telegram';
 
   @override
-  String get telegramNotPlayedToday => '請先玩今天的每日挑戰';
+  String get telegramNoGame => '請先完成一局';
 
   @override
   String get telegramSendFailed => '送到 Telegram 失敗';
